@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=62.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robotframework-browser-recorder-selectors"
+dynamic = ["version"]
+# Needs the __recordedSelector and __recordingStarted hooks of Record Keyword.
+dependencies = ["robotframework-browser>=21.1.0"]
+requires-python = ">= 3.11"
+description = "A Browser library plugin that makes the recorder record readable selectors."
+readme = "README.md"
+license = "Apache-2.0"
+keywords = ["robotframework", "playwright", "browser", "recorder"]
+classifiers = [
+  "Framework :: Robot Framework",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Testing",
+]
+
+[tool.setuptools]
+packages = ["RecorderSelectors"]
+
+[tool.setuptools.dynamic]
+version = {attr = "RecorderSelectors.__version__"}
+
+[tool.setuptools.package-data]
+RecorderSelectors = ["js/*.js", "js/rules/*.js"]
