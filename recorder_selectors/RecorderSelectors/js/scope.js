@@ -24,93 +24,122 @@ function scopeOf(element) {
     "[role=menuitem], [role=option], [role=combobox], [role=textbox], " +
     "script, style, template, noscript";
   const document = element.ownerDocument;
-  const normalizeSpace = (text) => (text || "").replace(/\s+/g, " ").trim();
-  const precedes = (a, b) =>
-    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  function normalizeSpace(text) {
+    return (text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function precedes(a, b) {
+    return Boolean(
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  }
 
   // --- lookalikes: elements with the same tag, role and name
-  const lookalikeKey = (e) =>
-    [
-      e.localName,
-      e.getAttribute("role") || "",
+
+  function lookalikeKey(e) {
+    const name =
       normalizeSpace(e.getAttribute("aria-label")) ||
-        normalizeSpace(e.textContent) ||
-        normalizeSpace(e.getAttribute("title")),
-    ].join("\u0000");
+      normalizeSpace(e.textContent) ||
+      normalizeSpace(e.getAttribute("title"));
+    return [e.localName, e.getAttribute("role") || "", name].join("\u0000");
+  }
+
   const elementKey = lookalikeKey(element);
-  const isLookalike = (e) =>
-    e !== element &&
-    !e.contains(element) &&
-    !element.contains(e) &&
-    lookalikeKey(e) === elementKey;
-  const lastLookalikeBefore = (ancestor) =>
-    [...ancestor.getElementsByTagName(element.localName)]
-      .filter((e) => isLookalike(e) && precedes(e, element))
-      .at(-1);
+
+  function isLookalike(e) {
+    if (e === element) return false;
+    if (e.contains(element) || element.contains(e)) return false;
+    return lookalikeKey(e) === elementKey;
+  }
+
+  function lastLookalikeBefore(ancestor) {
+    const sameTag = [...ancestor.getElementsByTagName(element.localName)];
+    return sameTag.filter((e) => isLookalike(e) && precedes(e, element)).at(-1);
+  }
 
   // --- texts that can be a scope
-  const isVisible = (e) => (e.checkVisibility ? e.checkVisibility() : true);
-  const isScopeElement = (e) =>
-    e &&
-    !e.contains(element) &&
-    !e.closest(NAMED_BY_THEIR_TEXT) &&
-    !e.querySelector(NAMED_BY_THEIR_TEXT) &&
-    normalizeSpace(e.textContent) !== "" &&
-    isVisible(e);
+
+  function isVisible(e) {
+    if (!e.checkVisibility) return true;
+    return e.checkVisibility();
+  }
+
+  function isScopeElement(e) {
+    if (!e) return false;
+    if (e.contains(element)) return false;
+    if (e.closest(NAMED_BY_THEIR_TEXT)) return false;
+    if (e.querySelector(NAMED_BY_THEIR_TEXT)) return false;
+    if (normalizeSpace(e.textContent) === "") return false;
+    return isVisible(e);
+  }
+
   // The text nodes of `root` before the element, in document order.
-  function* textNodesBefore(root) {
+  function textNodesBefore(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let node; (node = walker.nextNode()) && precedes(node, element); )
-      yield node;
+    const nodes = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!precedes(node, element)) break;
+      nodes.push(node);
+    }
+    return nodes;
   }
 
   // --- the search, from the closest ancestor up
-  const ancestorsOf = (e) => {
-    const parent = e.parentElement;
-    return parent && parent !== document.documentElement
-      ? [parent, ...ancestorsOf(parent)]
-      : [];
-  };
+
+  // The ancestors of the element below the document element, the closest first.
+  function ancestors() {
+    const found = [];
+    for (let e = element.parentElement; e; e = e.parentElement) {
+      if (e === document.documentElement) break;
+      found.push(e);
+    }
+    return found;
+  }
+
   // In `ancestor`: the scope text, null to stop the search, or undefined to
   // look further up.
-  const scopeIn = (ancestor) => {
+  function scopeIn(ancestor) {
     const lookalike = lastLookalikeBefore(ancestor);
-    const scopeElement = [...textNodesBefore(ancestor)]
-      .filter((node) => !lookalike || precedes(lookalike, node))
-      .filter(
-        (node) =>
-          normalizeSpace(node.textContent) && isScopeElement(node.parentElement),
-      )
-      .at(-1)?.parentElement;
-    if (scopeElement) return normalizeSpace(scopeElement.textContent);
+    const afterLookalike = (node) => !lookalike || precedes(lookalike, node);
+    const isScopeText = (node) =>
+      normalizeSpace(node.textContent) !== "" && isScopeElement(node.parentElement);
+    const lastText = textNodesBefore(ancestor)
+      .filter(afterLookalike)
+      .filter(isScopeText)
+      .at(-1);
+    if (lastText) return normalizeSpace(lastText.parentElement.textContent);
     // Any text further up comes before the lookalike too.
-    return lookalike ? null : undefined;
-  };
-  const firstAnswer = (ancestors) =>
-    ancestors.reduce(
-      (found, ancestor) => (found === undefined ? scopeIn(ancestor) : found),
-      undefined,
-    );
+    if (lookalike) return null;
+    return undefined;
+  }
 
-  return firstAnswer(ancestorsOf(element)) ?? null;
+  for (const ancestor of ancestors()) {
+    const scope = scopeIn(ancestor);
+    if (scope !== undefined) return scope;
+  }
+  return null;
 }
 
 // Runs in the page: the text a `scope=` selector asks for, quoted or not.
 function wantedScope(body) {
   const trimmed = body.trim();
-  return trimmed.startsWith('"')
-    ? JSON.parse(trimmed)
-    : trimmed.replace(/\s+/g, " ");
+  if (trimmed.startsWith('"')) return JSON.parse(trimmed);
+  return trimmed.replace(/\s+/g, " ");
 }
 
 const ENGINE = `(() => {
   const scopeOf = ${scopeOf};
   const wantedScope = ${wantedScope};
-  const queryAll = (root, body) =>
-    root && root.nodeType === 1 && scopeOf(root) === wantedScope(body)
-      ? [root]
-      : [];
-  return { query: (root, body) => queryAll(root, body)[0] || null, queryAll };
+  function queryAll(root, body) {
+    if (!root || root.nodeType !== 1) return [];
+    if (scopeOf(root) !== wantedScope(body)) return [];
+    return [root];
+  }
+  function query(root, body) {
+    return queryAll(root, body)[0] || null;
+  }
+  return { query, queryAll };
 })()`;
 
 async function register(playwright) {
@@ -126,14 +155,16 @@ async function register(playwright) {
   }
 }
 
-module.exports = {
-  scopeOf,
-  register,
-  // The `scope=` selector part that keeps the elements whose scope is `text`.
-  scopeSelector: (text) => `${ENGINE_NAME}=${JSON.stringify(text)}`,
-  // The text of a `scope=` part, or undefined for any other part.
-  scopeTextOf: (part) =>
-    part.startsWith(`${ENGINE_NAME}=`)
-      ? wantedScope(part.slice(ENGINE_NAME.length + 1))
-      : undefined,
-};
+// The `scope=` selector part that keeps the elements whose scope is `text`.
+function scopeSelector(text) {
+  return `${ENGINE_NAME}=${JSON.stringify(text)}`;
+}
+
+// The text of a `scope=` part, or undefined for any other part.
+function scopeTextOf(part) {
+  const prefix = `${ENGINE_NAME}=`;
+  if (!part.startsWith(prefix)) return undefined;
+  return wantedScope(part.slice(prefix.length));
+}
+
+module.exports = { scopeOf, register, scopeSelector, scopeTextOf };

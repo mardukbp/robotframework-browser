@@ -38,9 +38,7 @@ function parse(selector) {
   const parts = selector.split(SEPARATOR).map(parsePart);
   const frames = parts.slice(0, parts.findLastIndex(entersFrame) + 1);
   const afterFrames = parts.slice(frames.length);
-  const targetIndex = afterFrames.length
-    ? Math.max(afterFrames.findLastIndex((part) => !isFilter(part)), 0)
-    : -1;
+  const targetIndex = targetIndexIn(afterFrames);
   return {
     selector,
     parts,
@@ -52,12 +50,30 @@ function parse(selector) {
   };
 }
 
-const entersFrame = ({ raw }) => raw === ENTER_FRAME;
-const isNth = ({ engine }) => engine === "nth";
-const isFilter = (part) => isNth(part) || part.engine === "scope";
+// The index of the last part that is no filter; the first part when all are
+// filters, and -1 when there are no parts.
+function targetIndexIn(parts) {
+  if (parts.length === 0) return -1;
+  const lastNoFilter = parts.findLastIndex((part) => !isFilter(part));
+  return Math.max(lastNoFilter, 0);
+}
+
+function entersFrame(part) {
+  return part.raw === ENTER_FRAME;
+}
+
+function isNth(part) {
+  return part.engine === "nth";
+}
+
+function isFilter(part) {
+  return isNth(part) || part.engine === "scope";
+}
 
 // One part of a chain, by the first parser that recognizes it.
-const parsePart = (raw) => firstDefined(PARSERS, (parser) => parser(raw));
+function parsePart(raw) {
+  return firstDefined(PARSERS, (parser) => parser(raw));
+}
 
 // A `role` part, when everything after the role is attributes.
 function parseRole(raw) {
@@ -65,7 +81,8 @@ function parseRole(raw) {
   if (!head) return undefined;
   const tail = raw.slice(head[0].length);
   const attributes = [...tail.matchAll(ATTRIBUTE)];
-  if (attributes.map(([all]) => all).join("") !== tail) return undefined;
+  const allAttributes = attributes.map(([all]) => all).join("") === tail;
+  if (!allAttributes) return undefined;
   return {
     engine: "role",
     prefix: head[1],
@@ -83,131 +100,148 @@ function parseText(raw) {
 
 function parseScope(raw) {
   const text = scopeTextOf(raw);
-  return text === undefined ? undefined : { engine: "scope", text };
+  if (text === undefined) return undefined;
+  return { engine: "scope", text };
 }
 
-// A part kept as it was, as `engine`, when it matches `pattern`.
-const parseByPattern = (engine, pattern) => (raw) =>
-  pattern.test(raw) ? { engine, raw } : undefined;
+function parseId(raw) {
+  if (!ID.test(raw)) return undefined;
+  return { engine: "id", raw };
+}
 
-const PARSERS = [
-  parseRole,
-  parseText,
-  parseScope,
-  parseByPattern("id", ID),
-  parseByPattern("nth", NTH),
-  (raw) => ({ engine: "other", raw }),
-];
+function parseNth(raw) {
+  if (!NTH.test(raw)) return undefined;
+  return { engine: "nth", raw };
+}
 
-const toAttribute = ([, key, quoted, flag, plain]) =>
-  quoted === undefined
-    ? { key, value: plain, flag: "", quoted: false }
-    : { key, value: decodeAttribute(quoted), flag, quoted: true };
+function parseOther(raw) {
+  return { engine: "other", raw };
+}
+
+const PARSERS = [parseRole, parseText, parseScope, parseId, parseNth, parseOther];
+
+function toAttribute([, key, quoted, flag, plain]) {
+  if (quoted === undefined) return { key, value: plain, flag: "", quoted: false };
+  return { key, value: decodeAttribute(quoted), flag, quoted: true };
+}
 
 // ------------------------------------------------------------------ print
 
-const print = (parts) => parts.map(printPart).join(" >> ");
+function print(parts) {
+  return parts.map(printPart).join(" >> ");
+}
 
-const printPart = (part) => (PRINTERS[part.engine] ?? printRaw)(part);
+function printPart(part) {
+  if (part.engine === "role") return printRole(part);
+  if (part.engine === "text" || part.engine === "label") return printText(part);
+  if (part.engine === "scope") return scopeSelector(part.text);
+  return part.raw;
+}
 
-const printRaw = ({ raw }) => raw;
+function printRole({ prefix, role, attrs }) {
+  return prefix + role + attrs.map(printAttribute).join("");
+}
 
-const printText = ({ prefix, value, flag }) =>
-  `${prefix}${JSON.stringify(value)}${flag}`;
+function printText({ prefix, value, flag }) {
+  return `${prefix}${JSON.stringify(value)}${flag}`;
+}
 
-const printAttribute = ({ key, value, flag, quoted }) => {
+function printAttribute({ key, value, flag, quoted }) {
   if (value === undefined) return `[${key}]`;
-  return quoted
-    ? `[${key}=${encodeAttribute(value)}${flag}]`
-    : `[${key}=${value}]`;
-};
-
-const PRINTERS = {
-  role: ({ prefix, role, attrs }) =>
-    prefix + role + attrs.map(printAttribute).join(""),
-  text: printText,
-  label: printText,
-  scope: ({ text }) => scopeSelector(text),
-};
+  if (!quoted) return `[${key}=${value}]`;
+  return `[${key}=${encodeAttribute(value)}${flag}]`;
+}
 
 // Quoting of attribute values in `role` parts, as Playwright does it.
-const encodeAttribute = (value) =>
-  `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-const decodeAttribute = (quoted) =>
-  quoted.slice(1, -1).replace(/\\(.)/g, "$1");
+function encodeAttribute(value) {
+  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
+function decodeAttribute(quoted) {
+  return quoted.slice(1, -1).replace(/\\(.)/g, "$1");
+}
 
 // ------------------------------------------------------ reading and changing
 
 // `{ value, exact }`: the name of a `role` part, the text of a `text` or
 // `label` part, or undefined.
-const nameOf = (part) => NAME_READERS[part.engine]?.(part);
+function nameOf(part) {
+  if (part.engine === "role") return attributeOf(part, "name");
+  if (part.engine === "text" || part.engine === "label")
+    return { value: part.value, exact: isExact(part.flag) };
+  return undefined;
+}
 
 // `{ value, exact }` of the attribute `key` of a `role` part with a value.
 function attributeOf(part, key) {
   const found = part.attrs?.find((a) => a.key === key && a.value !== undefined);
-  return found && { value: found.value, exact: isExact(found.flag) };
+  if (!found) return undefined;
+  return { value: found.value, exact: isExact(found.flag) };
 }
 
-const textOf = ({ value, flag }) => ({ value, exact: isExact(flag) });
-
-const NAME_READERS = {
-  role: (part) => attributeOf(part, "name"),
-  text: textOf,
-  label: textOf,
-};
-
 // The part with another name, exact or not, or as exact as before.
-const withName = (part, value, exact) =>
-  part.engine === "role"
-    ? withAttribute(part, "name", value, exact)
-    : { ...part, value, flag: flagFor(exact, part.flag) };
+function withName(part, value, exact) {
+  if (part.engine === "role") return withAttribute(part, "name", value, exact);
+  return { ...part, value, flag: flagFor(exact, part.flag) };
+}
 
 // The `role` part with its attribute `key` set to `value`, exact or not, or as
 // exact as before; an undefined `value` removes it. Other attributes stay.
-const withAttribute = (part, key, value, exact) => ({
-  ...part,
-  attrs: part.attrs.flatMap((a) => {
-    if (a.key !== key) return [a];
+function withAttribute(part, key, value, exact) {
+  const changed = (attribute) => {
+    if (attribute.key !== key) return [attribute];
     if (value === undefined) return [];
-    return [{ key, value, flag: flagFor(exact, a.flag), quoted: true }];
-  }),
-});
+    const flag = flagFor(exact, attribute.flag);
+    return [{ key, value, flag, quoted: true }];
+  };
+  return { ...part, attrs: part.attrs.flatMap(changed) };
+}
 
 // The `role` part that also finds hidden elements.
-const withHidden = (part) =>
-  part.engine !== "role" || part.attrs.some((a) => a.key === "include-hidden")
-    ? part
-    : {
-        ...part,
-        attrs: [
-          { key: "include-hidden", value: "true", flag: "", quoted: false },
-          ...part.attrs,
-        ],
-      };
+function withHidden(part) {
+  if (part.engine !== "role") return part;
+  if (part.attrs.some((a) => a.key === "include-hidden")) return part;
+  const includeHidden = {
+    key: "include-hidden",
+    value: "true",
+    flag: "",
+    quoted: false,
+  };
+  return { ...part, attrs: [includeHidden, ...part.attrs] };
+}
 
-const isExact = (flag) => flag === "s";
+function isExact(flag) {
+  return flag === "s";
+}
 
 // The flag for `exact`, or `flag` when `exact` is undefined.
-const flagFor = (exact, flag) =>
-  exact === undefined ? flag || "" : exact ? "s" : "i";
+function flagFor(exact, flag) {
+  if (exact === undefined) return flag || "";
+  if (exact) return "s";
+  return "i";
+}
 
 // ------------------------------------------------------------------ build
 
 // A `role` part in Browser's syntax, by default with exact attributes.
-const role = (roleName, { name, description, exact = true } = {}) => ({
-  engine: "role",
-  prefix: "role=",
-  role: roleName,
-  attrs: Object.entries({ name, description })
+function role(roleName, { name, description, exact = true } = {}) {
+  const flag = flagFor(exact);
+  const attrs = Object.entries({ name, description })
     .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => ({ key, value, flag: flagFor(exact), quoted: true })),
-});
+    .map(([key, value]) => ({ key, value, flag, quoted: true }));
+  return { engine: "role", prefix: "role=", role: roleName, attrs };
+}
 
 // A `text` part in Browser's syntax, which compares the element's own text.
-const text = (value) => ({ engine: "text", prefix: "text=", value, flag: "" });
+function text(value) {
+  return { engine: "text", prefix: "text=", value, flag: "" };
+}
 
 // The `scope` filter keeping the elements whose scope is `text`.
-const scope = (text) => ({ engine: "scope", text });
+function scope(text) {
+  return { engine: "scope", text };
+}
 
 module.exports = {
   parse,

@@ -53,36 +53,37 @@ const TIMEOUT_MS = 500;
 // The `__recordedAction` hook of the steps: each runs on the Action the one
 // before gave.
 function pipeline(steps) {
-  return async ({ action, page, context }) => {
-    const recorded = await reduceAsync(
-      steps,
-      (current, step) => runStep(step, current, page, context),
-      action,
-    );
-    return recorded === action ? undefined : recorded;
+  return async function recordedAction({ action, page, context }) {
+    const runNext = (current, step) => runStep(step, current, page, context);
+    const recorded = await reduceAsync(steps, runNext, action);
+    if (recorded === action) return undefined;
+    return recorded;
   };
 }
 
 // One step on `action`; a step that fails keeps the Action it got.
 async function runStep(step, action, page, context) {
   try {
-    return (await step.run({ action, page, context })) ?? action;
+    const changed = await step.run({ action, page, context });
+    if (!changed) return action;
+    return changed;
   } catch (error) {
-    logFor(step.name)(`${action.selector ?? action.name} kept: ${error}`);
+    const what = action.selector ?? action.name;
+    logFor(step.name)(`${what} kept: ${error}`);
     return action;
   }
 }
 
 // A rule as a step: it changes the selector of an Action that has one.
 function selectorStep(rule) {
-  return {
-    name: rule.name,
-    run: async ({ action, page }) => {
-      if (!hasSelector(action) || !canAsk(page)) return undefined;
-      const selector = await applyRule(rule, action, page);
-      return selector ? { ...action, selector } : undefined;
-    },
-  };
+  async function run({ action, page }) {
+    if (!hasSelector(action)) return undefined;
+    if (!canAsk(page)) return undefined;
+    const selector = await applyRule(rule, action, page);
+    if (!selector) return undefined;
+    return { ...action, selector };
+  }
+  return { name: rule.name, run };
 }
 
 // ---------------------------------------------------------------- a rule
@@ -92,9 +93,8 @@ function applyRule(rule, action, page) {
   if (rule.actions && !rule.actions.includes(action.name)) return undefined;
   const chain = parse(action.selector);
   if (rule.skip?.(chain)) return undefined;
-  return rule.eachPart
-    ? replaceParts(rule, page, chain)
-    : tryCandidates(rule, page, chain);
+  if (rule.eachPart) return replaceParts(rule, page, chain);
+  return tryCandidates(rule, page, chain);
 }
 
 // ---------------------------------------------------- a rule's candidates
@@ -116,7 +116,7 @@ async function tryCandidates(rule, page, chain) {
     );
     const { selector, rejected } = pickSelector(rule, element, checked);
     rejected.map(whyRejected).forEach(log);
-    if (!selector && candidates.length) log(`${chain.selector} kept`);
+    if (!selector && candidates.length > 0) log(`${chain.selector} kept`);
     return selector;
   } finally {
     await element.handle?.dispose();
@@ -124,60 +124,64 @@ async function tryCandidates(rule, page, chain) {
 }
 
 // `{ parts, selector }` for each candidate of `rule`, the selector with the frames.
-const candidateSelectors = (rule, facts, chain) =>
-  (rule.candidates({ facts, chain }) || [])
-    .filter(Boolean)
-    .map((parts) => ({ parts, selector: print([...chain.frames, ...parts]) }));
+function candidateSelectors(rule, facts, chain) {
+  const candidates = rule.candidates({ facts, chain }) || [];
+  return candidates.filter(Boolean).map((parts) => ({
+    parts,
+    selector: print([...chain.frames, ...parts]),
+  }));
+}
 
 // The candidate with `match`: how many elements it finds, and where the
 // recorded element is among them.
 async function checkCandidate(page, element, chain, candidate, rule) {
-  const parts = rule.includeHidden
-    ? candidate.parts.map(withHidden)
-    : candidate.parts;
-  return {
-    ...candidate,
-    match: await countMatches(page, element, chain.frames, parts),
-  };
+  let parts = candidate.parts;
+  if (rule.includeHidden) parts = parts.map(withHidden);
+  const match = await countMatches(page, element, chain.frames, parts);
+  return { ...candidate, match };
 }
 
-const findsOnlyTheElement = ({ match }) =>
-  match?.count === 1 && match.index === 0;
+function findsOnlyTheElement({ match }) {
+  if (!match) return false;
+  return match.count === 1 && match.index === 0;
+}
 
 // `{ selector, rejected }`: the candidate that finds only the element, or the
 // first one with `nth=` when the rule falls back to that, and the candidates
 // rejected before it.
 function pickSelector(rule, element, checked) {
   const found = checked.find(findsOnlyTheElement);
-  if (found)
-    return {
-      selector: found.selector,
-      rejected: checked.slice(0, checked.indexOf(found)),
-    };
-  const first = checked.find(({ match }) => match);
-  const withNth =
-    rule.fallback === "nth" && element.handle && first?.match.index >= 0
-      ? `${first.selector} >> nth=${first.match.index}`
-      : undefined;
-  return { selector: withNth, rejected: checked };
+  if (found) {
+    const rejected = checked.slice(0, checked.indexOf(found));
+    return { selector: found.selector, rejected };
+  }
+  return { selector: nthFallback(rule, element, checked), rejected: checked };
 }
 
-const whyRejected = ({ selector, match }) =>
-  match
-    ? `${selector} finds ${match.count} elements`
-    : `${selector} cannot be checked after the page changed`;
+// The first checked candidate with `>> nth=<index>` of the recorded element,
+// when the rule falls back to that and the element is in the page.
+function nthFallback(rule, element, checked) {
+  if (rule.fallback !== "nth") return undefined;
+  if (!element.handle) return undefined;
+  const first = checked.find(({ match }) => match);
+  if (!first || first.match.index < 0) return undefined;
+  return `${first.selector} >> nth=${first.match.index}`;
+}
+
+function whyRejected({ selector, match }) {
+  if (!match) return `${selector} cannot be checked after the page changed`;
+  return `${selector} finds ${match.count} elements`;
+}
 
 // ---------------------------------------------- a rule's part replacements
 
 // The chain with each part replaced by the first replacement of `eachPart`
 // that finds only the element the chain finds, part after part.
 async function replaceParts(rule, page, chain) {
-  const replaced = await reduceAsync(
-    chain.parts,
-    (parts, _, i) => replacePart(rule, page, parts, i),
-    chain.parts,
-  );
-  return replaced === chain.parts ? undefined : print(replaced);
+  const replaceNext = (parts, _, i) => replacePart(rule, page, parts, i);
+  const replaced = await reduceAsync(chain.parts, replaceNext, chain.parts);
+  if (replaced === chain.parts) return undefined;
+  return print(replaced);
 }
 
 async function replacePart(rule, page, parts, i) {
@@ -185,12 +189,14 @@ async function replacePart(rule, page, parts, i) {
   if (rule.skipPart?.(part)) return parts;
   const facts = await factsOf(page, print(parts.slice(0, i + 1)));
   if (!facts) return parts;
-  const replacement = await findAsync(
-    rule.eachPart({ part, facts }).filter(Boolean),
-    (candidate) =>
-      findsSameElement(page, print(replaceAt(parts, i, candidate)), print(parts)),
-  );
-  return replacement ? replaceAt(parts, i, replacement) : parts;
+  const replacements = rule.eachPart({ part, facts }).filter(Boolean);
+  const findsTheSame = (replacement) => {
+    const candidate = print(replaceAt(parts, i, replacement));
+    return findsSameElement(page, candidate, print(parts));
+  };
+  const replacement = await findAsync(replacements, findsTheSame);
+  if (!replacement) return parts;
+  return replaceAt(parts, i, replacement);
 }
 
 // ---------------------------------------------------- the recorded element
@@ -205,47 +211,52 @@ async function findRecordedElement(page, chain) {
   const count = await recorded.count();
   if (count === 1) {
     const handle = await recorded.elementHandle({ timeout: TIMEOUT_MS });
-    return { facts: await handle.evaluate(ELEMENT_FACTS, false), handle };
+    const facts = await handle.evaluate(ELEMENT_FACTS, false);
+    return { facts, handle };
   }
   const press = recentPress(page);
-  return wasPressed(press, chain.target) && press.peers
-    ? { facts: press, peers: press.peers }
-    : { count };
+  if (wasPressed(press, chain.target) && press.peers)
+    return { facts: press, peers: press.peers };
+  return { count };
 }
 
 // Whether `press` is on what the `role` part `target` names.
-const wasPressed = (press, target) =>
-  target.engine === "role" &&
-  Boolean(nameOf(target)) &&
-  target.role === press?.role &&
-  textMatches(press.name, nameOf(target));
+function wasPressed(press, target) {
+  if (!press) return false;
+  if (target.engine !== "role") return false;
+  const name = nameOf(target);
+  if (!name) return false;
+  return target.role === press.role && textMatches(press.name, name);
+}
 
 // `{ count, index }`: how many elements `parts` finds after `frames`, and the
 // index of the recorded element among them; from its peers at the press when
 // the page changed, or undefined when that cannot tell.
 async function countMatches(page, element, frames, parts) {
   if (!element.handle) return countPeers(element.peers, parts);
-  const [count, index] = await page
-    .locator(print([...frames, ...parts]))
-    .evaluateAll(
-      (found, target) => [found.length, found.indexOf(target)],
-      element.handle,
-    );
+  const locator = page.locator(print([...frames, ...parts]));
+  const [count, index] = await locator.evaluateAll(
+    (found, target) => [found.length, found.indexOf(target)],
+    element.handle,
+  );
   return { count, index };
 }
 
 // Like `countMatches`, for a candidate of the form `role=...` or
 // `role=... >> scope=...`, the only ones the peers can answer for.
 function countPeers(peers, [rolePart, scopePart, ...more]) {
-  if (rolePart?.engine !== "role" || more.length) return undefined;
+  if (rolePart?.engine !== "role") return undefined;
+  if (more.length > 0) return undefined;
   if (scopePart && scopePart.engine !== "scope") return undefined;
-  const found = peers.filter(
-    (peer) =>
-      peer.role === rolePart.role &&
-      textMatches(peer.name, nameOf(rolePart)) &&
-      textMatches(peer.description, attributeOf(rolePart, "description")) &&
-      (!scopePart || peer.scopeText === scopePart.text),
-  );
+  const isFound = (peer) => {
+    if (peer.role !== rolePart.role) return false;
+    if (!textMatches(peer.name, nameOf(rolePart))) return false;
+    const description = attributeOf(rolePart, "description");
+    if (!textMatches(peer.description, description)) return false;
+    if (scopePart && peer.scopeText !== scopePart.text) return false;
+    return true;
+  };
+  const found = peers.filter(isFound);
   return { count: found.length, index: found.findIndex((p) => p.isTarget) };
 }
 
@@ -254,40 +265,43 @@ function countPeers(peers, [rolePart, scopePart, ...more]) {
 // The facts of the element `selector` finds, if it finds only one.
 async function factsOf(page, selector) {
   const locator = page.locator(selector);
-  return (await locator.count()) === 1
-    ? locator.evaluate(ELEMENT_FACTS, false, { timeout: TIMEOUT_MS })
-    : undefined;
+  if ((await locator.count()) !== 1) return undefined;
+  return locator.evaluate(ELEMENT_FACTS, false, { timeout: TIMEOUT_MS });
 }
 
 // Whether `candidate` finds only the element `selector` finds.
 async function findsSameElement(page, candidate, selector) {
   const locator = page.locator(candidate);
-  return (
-    (await locator.count()) === 1 &&
-    (await locator.and(page.locator(selector)).count()) === 1
-  );
+  if ((await locator.count()) !== 1) return false;
+  return (await locator.and(page.locator(selector)).count()) === 1;
 }
 
 // ---------------------------------------------------------------- helpers
 
-const hasSelector = ({ selector }) =>
-  typeof selector === "string" && selector.trim() !== "";
+function hasSelector({ selector }) {
+  return typeof selector === "string" && selector.trim() !== "";
+}
 
-const canAsk = (page) => typeof page?.locator === "function";
+function canAsk(page) {
+  return typeof page?.locator === "function";
+}
 
 // Whether `actual` matches `wanted`, `{ value, exact }`: equal when exact, else
 // containing it in any case. An undefined `wanted` matches anything.
-const textMatches = (actual, wanted) =>
-  !wanted ||
-  (wanted.exact
-    ? normalizeSpace(actual) === normalizeSpace(wanted.value)
-    : normalizeSpace(actual)
-        .toLowerCase()
-        .includes(normalizeSpace(wanted.value).toLowerCase()));
+function textMatches(actual, wanted) {
+  if (!wanted) return true;
+  const have = normalizeSpace(actual);
+  const want = normalizeSpace(wanted.value);
+  if (wanted.exact) return have === want;
+  return have.toLowerCase().includes(want.toLowerCase());
+}
 
-const normalizeSpace = (text) => (text || "").replace(/\s+/g, " ").trim();
+function normalizeSpace(text) {
+  return (text || "").replace(/\s+/g, " ").trim();
+}
 
-const logFor = (name) => (message) =>
-  console.log(`recorder_selectors ${name}: ${message}`);
+function logFor(name) {
+  return (message) => console.log(`recorder_selectors ${name}: ${message}`);
+}
 
 module.exports = { pipeline, selectorStep };

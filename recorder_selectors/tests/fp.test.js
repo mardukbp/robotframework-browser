@@ -20,7 +20,11 @@ describe("fp", () => {
 
   it("firstDefined gives the first defined result and calls nothing after it", () => {
     const called = [];
-    const f = (x) => (called.push(x), x > 1 ? x * 10 : undefined);
+    const f = (x) => {
+      called.push(x);
+      if (x > 1) return x * 10;
+      return undefined;
+    };
     assert.equal(firstDefined([1, 2, 3], f), 20);
     assert.deepEqual(called, [1, 2]);
     assert.equal(firstDefined([1], f), undefined);

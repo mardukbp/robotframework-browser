@@ -4,7 +4,6 @@
 // in every frame, `binding` an optional `{ name, receive(page, data) }` that the
 // script calls to send `data` to Node.
 
-const { reduceAsync } = require("./fp.js");
 const { pressScript } = require("./page.js");
 
 const PRESS_BINDING = "__rfbRecorderSelectorsPress";
@@ -22,14 +21,14 @@ const PRESSES = {
 // The facts of the element pressed on `page` in the last ten seconds, if any.
 function recentPress(page) {
   const press = lastPressByPage.get(page);
-  return press && Date.now() - press.at <= PRESS_MAX_AGE_MS
-    ? press.facts
-    : undefined;
+  if (!press) return undefined;
+  if (Date.now() - press.at > PRESS_MAX_AGE_MS) return undefined;
+  return press.facts;
 }
 
 function rememberPress(page, facts) {
-  if (facts && typeof facts === "object")
-    lastPressByPage.set(page, { facts, at: Date.now() });
+  if (!facts || typeof facts !== "object") return;
+  lastPressByPage.set(page, { facts, at: Date.now() });
 }
 
 // The page scripts already installed, by context.
@@ -37,17 +36,25 @@ const installedByContext = new WeakMap();
 
 // Runs each page script once per context, in order. One that fails, and those
 // after it, are tried again the next time.
-function install(context, pageScripts) {
-  const installed = installedByContext.get(context) ?? new Set();
-  installedByContext.set(context, installed);
+async function install(context, pageScripts) {
+  const installed = installedScriptsOf(context);
   const notYetInstalled = pageScripts.filter((each) => !installed.has(each));
+  // Marked before the first await, so a second call meanwhile skips them.
   notYetInstalled.forEach((each) => installed.add(each));
-  return reduceAsync(notYetInstalled, (_, pageScript, i) =>
-    installScript(context, pageScript).catch((error) => {
+  for (const [i, pageScript] of notYetInstalled.entries()) {
+    try {
+      await installScript(context, pageScript);
+    } catch (error) {
       notYetInstalled.slice(i).forEach((each) => installed.delete(each));
       throw error;
-    }),
-  );
+    }
+  }
+}
+
+function installedScriptsOf(context) {
+  if (!installedByContext.has(context))
+    installedByContext.set(context, new Set());
+  return installedByContext.get(context);
 }
 
 // Runs `pageScript` in the frames already open, and as an init script, before
@@ -71,7 +78,8 @@ async function exposeBinding(context, { name, receive }) {
   }
 }
 
-const framesOf = (context) =>
-  context.pages().flatMap((page) => page.frames());
+function framesOf(context) {
+  return context.pages().flatMap((page) => page.frames());
+}
 
 module.exports = { PRESSES, recentPress, install };

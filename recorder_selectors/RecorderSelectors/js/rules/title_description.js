@@ -6,12 +6,22 @@
 
 const { role, nameOf } = require("../selector.js");
 
+// Only a selector by a role and a name.
+function skip({ target }) {
+  if (target.engine !== "role") return true;
+  return !nameOf(target);
+}
+
+function candidates({ facts }) {
+  if (!facts.role || !facts.title) return [];
+  if (facts.title !== facts.text) return [];
+  if (facts.hasDescription) return [];
+  return [[role(facts.role, { description: facts.title })]];
+}
+
 module.exports = {
   name: "title_description",
   actions: ["click"],
-  skip: ({ target }) => target.engine !== "role" || !nameOf(target),
-  candidates: ({ facts }) =>
-    facts.role && facts.title && facts.title === facts.text && !facts.hasDescription
-      ? [[role(facts.role, { description: facts.title })]]
-      : [],
+  skip,
+  candidates,
 };

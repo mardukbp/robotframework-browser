@@ -23,40 +23,44 @@ async function recordByLabel({ action, page }) {
     .evaluate(recordableLabels, [action.options, CHOSEN_LABELS], {
       timeout: TIMEOUT_MS,
     });
-  if (labels.every((label) => typeof label === "string"))
-    return { ...action, by: "label", options: labels };
+  const allHaveLabels = labels.every((label) => typeof label === "string");
+  if (allHaveLabels) return { ...action, by: "label", options: labels };
   console.log(
     `recorder_selectors select_labels: ${action.selector} kept by value: an option has no label of its own`,
   );
   return undefined;
 }
 
-// A choice Playwright reports by value, in a page to look the labels up in.
-const isChoiceByValue = ({ name, by, selector, options }, page) =>
-  name === "select" &&
-  by === undefined &&
-  typeof selector === "string" &&
-  Array.isArray(options) &&
-  options.length > 0 &&
-  typeof page?.locator === "function";
+// Whether `action` is a choice Playwright reports by value, in a page to look
+// the labels up in.
+function isChoiceByValue(action, page) {
+  if (action.name !== "select") return false;
+  if (action.by !== undefined) return false;
+  if (typeof action.selector !== "string") return false;
+  if (!Array.isArray(action.options) || action.options.length === 0) return false;
+  return typeof page?.locator === "function";
+}
 
 // In the page: the label to record for each value, or null when it has none:
 // only its option has the value and the label, and it had that label when chosen.
 function recordableLabels(select, [values, chosenLabels]) {
   const options = Array.from(select.options);
-  const optionsWith = (key, value) =>
-    options.filter((option) => option[key] === value).length;
-  const chosen =
-    select[chosenLabels] instanceof Map ? select[chosenLabels] : new Map();
-  const labelOf = (value) => {
+  let chosen = new Map();
+  if (select[chosenLabels] instanceof Map) chosen = select[chosenLabels];
+
+  function optionsWith(key, value) {
+    return options.filter((option) => option[key] === value).length;
+  }
+
+  function labelOf(value) {
     const label = options.find((option) => option.value === value)?.label;
-    return label &&
-      optionsWith("value", value) === 1 &&
-      optionsWith("label", label) === 1 &&
-      chosen.get(value) === label
-      ? label
-      : null;
-  };
+    if (!label) return null;
+    if (optionsWith("value", value) !== 1) return null;
+    if (optionsWith("label", label) !== 1) return null;
+    if (chosen.get(value) !== label) return null;
+    return label;
+  }
+
   return values.map(labelOf);
 }
 
@@ -65,19 +69,23 @@ function recordableLabels(select, [values, chosenLabels]) {
 function noteChosenLabels(chosenLabels) {
   if (window[`${chosenLabels}Installed`]) return;
   window[`${chosenLabels}Installed`] = true;
-  const note = (event) => {
+
+  function note(event) {
     const select = event.composedPath()[0];
     if (!select || select.localName !== "select") return;
     const options = Array.from(select.options);
-    const isOwnLabel = (label) =>
-      label && options.filter((option) => option.label === label).length === 1;
-    select[chosenLabels] = new Map(
-      Array.from(select.selectedOptions, (option) => [
-        option.value,
-        isOwnLabel(option.label) ? option.label : null,
-      ]),
-    );
-  };
+    const ownLabel = (option) => {
+      const sharing = options.filter((other) => other.label === option.label);
+      if (!option.label || sharing.length !== 1) return null;
+      return option.label;
+    };
+    const chosen = Array.from(select.selectedOptions, (option) => [
+      option.value,
+      ownLabel(option),
+    ]);
+    select[chosenLabels] = new Map(chosen);
+  }
+
   window.addEventListener("input", note, true);
 }
 
