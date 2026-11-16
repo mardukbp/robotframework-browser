@@ -25,6 +25,12 @@ the one before:
 | `aria_label` | `#APD_\:\:SalesOrderType-inner-vhi` | `role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"` |
 | `label_scope` | `css=select >> nth=3` | `role=combobox >> scope="Mittelgeber*"` |
 | `caption_scope` | `[id="#category--12-content"] >> role=link[name*="Details"i]` | `role=link[name*="Details"i] >> scope="Robot Framework"` |
+| `exact_names` | `role=link[name*="RFCP® Robot"i]` | `role=link[name="RFCP® Robot Framework® Certified Professional"s]` |
+
+`exact_names` comes last: the name or text the selector finds its element by, after the
+`scope=` and `nth=` filters, is made an exact match with the element's whole name, so the
+other rules' results end up exact too, for example
+`role=link[name="Details & Termine"s] >> scope="Robot Framework"`.
 
 A rewritten selector is used only when it finds exactly the recorded element; otherwise the
 selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
@@ -81,8 +87,9 @@ puts the helpers of `elementFacts` inside its body for that reason.
 - The facts (`role`, `name`, `description`, ...) approximate what Playwright computes. They
   choose the candidates; only the check in the page, or against the snapshot, decides.
 - All rules share the 2 seconds Browser waits for the hooks of one selector.
-- Browser instances that share one Node process, as in pabot, share its JS extensions: once
-  one suite imports the plugin, every recording in that process uses it.
+- Browser instances that share one Node process, as in pabot, keep their JS extensions
+  apart, but share its selector engines: once one of them imports the plugin, `scope=` works
+  in all of them.
 
 ## Tests
 

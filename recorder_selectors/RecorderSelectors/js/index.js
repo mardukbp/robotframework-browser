@@ -10,6 +10,7 @@ module.exports = pipeline([
   require("./rules/aria_label.js"),
   require("./rules/label_scope.js"),
   require("./rules/caption_scope.js"),
+  require("./rules/exact_names.js"),
 ]);
 
 // Called by the plugin when it is imported, so that recorded `scope=` selectors
