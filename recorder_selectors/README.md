@@ -136,9 +136,21 @@ The acceptance tests are in `atest/`. `atest/__init__.robot` serves `atest/pages
 port with `atest/PageServer.py`, at `localhost` and `127.0.0.1`, so a test can put a page of
 another origin in an iframe; each test adds the elements it records to that blank page.
 
+They use only what Browser documents for plugins, never its internals, through
+`atest/HookProbe.py`, a test plugin imported after RecorderSelectors
+(`plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py`):
+
+- Most suites test the plugin's contract with Browser, the `__recordedAction` hook. A test
+  clicks or selects with Browser, as the user would, then gives the hook the Action
+  Playwright reports for that, with Playwright's selector written into the test, and checks
+  the Action the plugin returns and that its selector finds the element. They run headless.
+- `end_to_end.robot` records for real, so that a change in what Playwright reports shows. Its
+  JS extension, loaded after the plugin's, sees in its own `__recordedAction` the Actions the
+  plugin gave; the test clicks a probe until that happens, so it knows the recorder records.
+  `Record Keyword` ends after a short `idle_timeout` and returns the keyword Browser wrote.
+  The recorder needs a visible browser, so on a machine without a display run it under
+  `xvfb-run`, or leave it out with `--exclude end-to-end`.
+
 ```
 robot --outputdir atest/output atest
 ```
-
-The recorder needs a visible browser; the suites allow it headless through
-`recorder_allows_headless` of the Browser library instance.

@@ -4,61 +4,52 @@ Documentation     The caption_scope rule of the RecorderSelectors plugin: a link
 ...               its name, scoped by the closest text before it. Text inside other links is no
 ...               scope.
 
-Library    Browser    plugins=${CURDIR}/../RecorderSelectors
+Library           Browser    plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py
 Resource          recorder.resource
 
-Suite Setup       Allow Recording Headless            ${True}
-Suite Teardown    Allow Recording Headless            ${False}
 Test Setup        Open Page With Course Categories
-Test Teardown     Run Keywords                        End Any Session                                                       AND    Close Page    ALL    AND    Wait For All Promises
+Test Teardown     Close Page    ALL
 
 Test Tags         recorder
 
 
 *** Test Cases ***
 A Link Scoped By An Id Is Scoped By The Category Title Above It
-    ${selector} =      Record Click    css=[id="#category--12-content"] >> text=Certified Professional
+    ${selector} =    Recorded Click
+    ...    css=[id="#category--12-content"] >> text=Certified Professional
+    ...    [id="#category--12-content"] >> internal:role=link[name="RFCP® Robot Framework®"i]
     Should Be Equal
-    ...                ${selector}
-    ...                role=link[name="RFCP® Robot Framework® Certified Professional"s] >> scope="Robot Framework"
-    Get Attribute
-    ...                ${selector}
-    ...                href
-    ...                ==
-    ...                \#rfcp
+    ...    ${selector}
+    ...    internal:role=link[name="RFCP® Robot Framework® Certified Professional"s] >> scope="Robot Framework"
+    Get Attribute    ${selector}    href    ==    \#rfcp
 
 A Link After Other Links Is Scoped By The Category Title, Not By Their Text
-    ${selector} =      Record Click    css=[id="#category--12-content"] >> text=Webinar
+    ${selector} =    Recorded Click
+    ...    css=[id="#category--12-content"] >> text=Webinar
+    ...    [id="#category--12-content"] >> internal:role=link[name="Testautomatisierung mit Robot"i]
     Should Be Equal
-    ...                ${selector}
-    ...                role=link[name="Testautomatisierung mit Robot Framework - Webinar"s] >> scope="Robot Framework"
-    Get Attribute
-    ...                ${selector}
-    ...                href
-    ...                ==
-    ...                \#webinar
+    ...    ${selector}
+    ...    internal:role=link[name="Testautomatisierung mit Robot Framework - Webinar"s] >> scope="Robot Framework"
+    Get Attribute    ${selector}    href    ==    \#webinar
 
 A Link That Navigates Away Is Scoped By The Category Title Seen At The Click
     Evaluate JavaScript
-    ...                                 css=[id="#category--12-content"] >> text=Certified Professional
-    ...                                 (a) => a.setAttribute('href', '?rfcp')
-    ${selector} =                       Record Click
-    ...                                 css=[id="#category--12-content"] >> text=Certified Professional
+    ...    css=[id="#category--12-content"] >> text=Certified Professional
+    ...    (a) => a.setAttribute('href', '?rfcp')
+    ${selector} =    Recorded Click
+    ...    css=[id="#category--12-content"] >> text=Certified Professional
+    ...    [id="#category--12-content"] >> internal:role=link[name="RFCP® Robot Framework®"i]
     Should Be Equal
-    ...                                 ${selector}
-    ...                                 role=link[name="RFCP® Robot Framework® Certified Professional"s] >> scope="Robot Framework"
+    ...    ${selector}
+    ...    internal:role=link[name="RFCP® Robot Framework® Certified Professional"s] >> scope="Robot Framework"
     Close Page
     Open Page With Course Categories
-    Get Attribute
-    ...                                 ${selector}
-    ...                                 href
-    ...                                 ==
-    ...                                 \#rfcp
+    Get Attribute    ${selector}    href    ==    \#rfcp
 
 
 *** Keywords ***
 Open Page With Course Categories
-    Open Recorder Page
+    Open Test Page
     Add Elements
     ...                   <div id="category--11"><div class="collapsible-content">
     ...                   <header><div class="container"><div class="col"><p>Highlights </p></div>
