@@ -99,16 +99,24 @@ function parseRole(part) {
     role: head[2],
     name: textOf("name"),
     description: textOf("description"),
-    withName: (value, exact) =>
+    withName: (value, exact) => withAttribute("name", value, exact),
+    // The part with the attribute `key` set to `value`, exact or not, or as
+    // exact as before; an undefined `value` removes it.
+    withAttribute,
+  };
+
+  function withAttribute(key, value, exact) {
+    return (
       head[0] +
       attributes
-        .map((a) =>
-          a.key === "name"
-            ? `[name=${encodeAttribute(value)}${flagOf(exact, a.flag)}]`
-            : a.raw,
-        )
-        .join(""),
-  };
+        .map((a) => {
+          if (a.key !== key) return a.raw;
+          if (value === undefined) return "";
+          return `[${key}=${encodeAttribute(value)}${flagOf(exact, a.flag)}]`;
+        })
+        .join("")
+    );
+  }
 }
 
 // The flag of a name: `s` when `exact`, `i` when not, `flag` when undefined.
@@ -244,23 +252,23 @@ function elementFacts(element, withPeers) {
     [...(e.labels || [])].map((label) => label.textContent);
   const isFormField = (e) =>
     ["input", "select", "textarea"].includes(e.localName);
-  const nameOf = (e) =>
+  // The name from everything but the title, which names an element only when
+  // nothing else does.
+  const nameBeforeTitleOf = (e) =>
     flat(byIds(e, "aria-labelledby").join(" ")) ||
     flat(e.getAttribute("aria-label")) ||
     flat(labelsOf(e).join(" ")) ||
-    (isFormField(e) ? "" : flat(e.textContent)) ||
+    (isFormField(e) ? "" : flat(e.textContent));
+  const nameOf = (e) =>
+    nameBeforeTitleOf(e) ||
     flat(e.getAttribute("title")) ||
     flat(e.getAttribute("alt")) ||
     flat(e.getAttribute("placeholder"));
-  // The title describes an element only when it does not name it.
-  const descriptionOf = (e) => {
-    const title = flat(e.getAttribute("title"));
-    return (
-      flat(byIds(e, "aria-describedby").join(" ")) ||
-      flat(e.getAttribute("aria-description")) ||
-      (title !== nameOf(e) ? title : "")
-    );
-  };
+  // The title describes an element whenever something else names it.
+  const descriptionOf = (e) =>
+    flat(byIds(e, "aria-describedby").join(" ")) ||
+    flat(e.getAttribute("aria-description")) ||
+    (nameBeforeTitleOf(e) ? flat(e.getAttribute("title")) : "");
   const everyElement = (root, found = []) => {
     for (const e of root.querySelectorAll("*")) {
       found.push(e);
