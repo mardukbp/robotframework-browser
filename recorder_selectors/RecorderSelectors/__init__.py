@@ -31,6 +31,9 @@ class RecorderSelectors(LibraryComponent):
       beside it: ``role=combobox >> scope="Mittelgeber*"``.
     - An element scoped by the id of an ancestor is scoped by the text before
       it: ``role=link[name*="Details"i] >> scope="Robot Framework"``.
+    - Last, the name or text the selector finds its element by is matched
+      exactly, with the element's whole name:
+      ``role=link[name="Details & Termine"s] >> scope="Robot Framework"``.
 
     A rewritten selector is used only when it finds exactly the recorded
     element; otherwise Playwright's is kept and the reason is logged in

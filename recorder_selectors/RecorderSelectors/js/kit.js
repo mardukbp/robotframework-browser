@@ -99,22 +99,28 @@ function parseRole(part) {
     role: head[2],
     name: textOf("name"),
     description: textOf("description"),
-    withName: (value) =>
+    withName: (value, exact) =>
       head[0] +
       attributes
         .map((a) =>
           a.key === "name"
-            ? `[name=${encodeAttribute(value)}${a.flag || ""}]`
+            ? `[name=${encodeAttribute(value)}${flagOf(exact, a.flag)}]`
             : a.raw,
         )
         .join(""),
   };
 }
 
+// The flag of a name: `s` when `exact`, `i` when not, `flag` when undefined.
+function flagOf(exact, flag) {
+  if (exact === undefined) return flag || "";
+  return exact ? "s" : "i";
+}
+
 // One part of a chain: `{ engine, raw, name?, description?, withName? }`. `name`
 // is `{ value, exact }` for a `role=` part with a name and for the text of an
-// `internal:text=` or `internal:label=` part; `withName` gives the part with
-// another name.
+// `internal:text=` or `internal:label=` part; `withName(value, exact)` gives the
+// part with another name, exact or not, or as exact as before.
 function parsePart(part) {
   const role = parseRole(part);
   if (role) return role;
@@ -125,7 +131,8 @@ function parsePart(part) {
       engine,
       raw: part,
       name: { value: JSON.parse(quoted), exact: flag === "s" },
-      withName: (value) => `${head}${JSON.stringify(value)}${flag}`,
+      withName: (value, exact) =>
+        `${head}${JSON.stringify(value)}${flagOf(exact, flag)}`,
     };
   }
   const scopeText = scopeTextOf(part);
@@ -142,20 +149,22 @@ function isIdPart(part) {
 }
 
 // The chain of `selector`: `frames` up to the last frame it enters, `rest`
-// after them, `target` the last part of `rest` without a trailing `nth=`,
-// parsed, and `nth` that trailing part.
+// after them, `target` the last part of `rest` before the `scope=` and `nth=`
+// filters that end it, parsed, and `nth` the `nth=` among those filters.
 function parse(selector) {
   const parts = splitChain(selector);
   const frames = parts.slice(0, parts.lastIndexOf(ENTER_FRAME) + 1);
   const rest = parts.slice(frames.length);
-  const nth = NTH.test(rest.at(-1)) ? rest.at(-1) : undefined;
+  const isFilter = (part) => NTH.test(part) || scopeTextOf(part) !== undefined;
+  let end = rest.length;
+  while (end > 1 && isFilter(rest[end - 1])) end--;
   return {
     selector,
     parts,
     frames,
     rest,
-    nth,
-    target: parsePart(nth ? (rest.at(-2) ?? "") : rest.at(-1)),
+    nth: rest.slice(end).find((part) => NTH.test(part)),
+    target: parsePart(rest[end - 1] ?? ""),
   };
 }
 
