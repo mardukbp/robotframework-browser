@@ -6,13 +6,11 @@ Documentation     The aria_label rule of the RecorderSelectors plugin: Playwrigh
 ...               the click opens hides the form with aria-hidden. A selector Playwright already
 ...               made from a role and a name is kept, matched exactly.
 
-Library    Browser    plugins=${CURDIR}/../RecorderSelectors
+Library           Browser    plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py
 Resource          recorder.resource
 
-Suite Setup       Allow Recording Headless            ${True}
-Suite Teardown    Allow Recording Headless            ${False}
 Test Setup        Open Page With Value Help Fields
-Test Teardown     Run Keywords                        End Any Session                                                       AND    Close Page    ALL    AND    Wait For All Promises
+Test Teardown     Close Page    ALL
 
 Test Tags         recorder
 
@@ -20,56 +18,42 @@ Test Tags         recorder
 *** Test Cases ***
 A Value Help That Playwright Records By Its Role And Name Is Kept And Matched Exactly
     Remove Fields Except    APD_::SalesOrderType
-    ${selector} =           Record Click                      id=APD_::SalesOrderType-inner-vhi
-    Should Be Equal         ${selector}                       role=button[name="Wertehilfe einblenden"s]
-    Get Attribute
-    ...                     ${selector}
-    ...                     id
-    ...                     ==
-    ...                     APD_::SalesOrderType-inner-vhi
+    ${selector} =    Recorded Click
+    ...    id=APD_::SalesOrderType-inner-vhi
+    ...    internal:role=button[name="Wertehilfe einblenden"i]
+    Should Be Equal    ${selector}    internal:role=button[name="Wertehilfe einblenden"s]
+    Get Attribute    ${selector}    id    ==    APD_::SalesOrderType-inner-vhi
 
 A Recorded Value Help Is Scoped By The Input It Belongs To
-    ${selector} =      Record Click
-    ...                id=APD_::SalesOrganization-inner-vhi
+    ${selector} =    Recorded Click
+    ...    id=APD_::SalesOrganization-inner-vhi
+    ...    [id="APD_::SalesOrganization-inner-vhi"]
     Should Be Equal
-    ...                ${selector}
-    ...                role=button[name="Wertehilfe einblenden"s] >> scope="Verkaufsorganisation"
-    Get Attribute
-    ...                ${selector}
-    ...                id
-    ...                ==
-    ...                APD_::SalesOrganization-inner-vhi
+    ...    ${selector}
+    ...    role=button[name="Wertehilfe einblenden"s] >> scope="Verkaufsorganisation"
+    Get Attribute    ${selector}    id    ==    APD_::SalesOrganization-inner-vhi
 
 A Recorded Value Help Is Scoped By Its Input Although The Opened Dialog Hides The Form
     Evaluate JavaScript    id=form
-    ...                    (form) => form.addEventListener('click', () => form.setAttribute('aria-hidden', 'true'))
-    ${selector} =          Record Click
-    ...                    id=APD_::SalesOrderType-inner-vhi
+    ...    (form) => form.addEventListener('click', () => form.setAttribute('aria-hidden', 'true'))
+    ${selector} =    Recorded Click
+    ...    id=APD_::SalesOrderType-inner-vhi
+    ...    [id="APD_::SalesOrderType-inner-vhi"]
     Should Be Equal
-    ...                    ${selector}
-    ...                    role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"
-    Evaluate JavaScript
-    ...                    id=form
-    ...                    (form) => form.removeAttribute('aria-hidden')
-    Get Attribute
-    ...                    ${selector}
-    ...                    id
-    ...                    ==
-    ...                    APD_::SalesOrderType-inner-vhi
+    ...    ${selector}
+    ...    role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"
+    Evaluate JavaScript    id=form    (form) => form.removeAttribute('aria-hidden')
+    Get Attribute    ${selector}    id    ==    APD_::SalesOrderType-inner-vhi
 
 A Recorded Value Help Of An Input Without A Name Is Recorded By Its Role, Aria Label And Index
-    ${selector} =      Record Click            id=APD_::Note-inner-vhi
-    Should Be Equal    ${selector}             role=button[name="Wertehilfe einblenden"s] >> nth=2
-    Get Attribute
-    ...                ${selector}
-    ...                id
-    ...                ==
-    ...                APD_::Note-inner-vhi
+    ${selector} =    Recorded Click    id=APD_::Note-inner-vhi    [id="APD_::Note-inner-vhi"]
+    Should Be Equal    ${selector}    role=button[name="Wertehilfe einblenden"s] >> nth=2
+    Get Attribute    ${selector}    id    ==    APD_::Note-inner-vhi
 
 
 *** Keywords ***
 Open Page With Value Help Fields
-    Open Recorder Page
+    Open Test Page
     VAR    ${icon} =      style="display:inline-block;width:1em;height:1em;border:1px solid"
     Add Elements
     ...                   <section id="form" role="form" aria-label="Kundenauftrag anlegen">
