@@ -6,7 +6,7 @@
 //
 //   name        for the log in playwright-log.txt.
 //   actions     optional: the Action names (`click`, `fill`, ...) it rewrites;
-//               a pick has no Action, so such a rule never sees one.
+//               a pick arrives as the Action `pick`.
 //   skip        optional: `(chain) => boolean`, true leaves the selector alone.
 //   candidates  `({ el, chain }) => [parts, ...]`: the selectors to try, in
 //               order, each a list of chain parts without the frames. `el` holds
@@ -509,18 +509,21 @@ async function applyRule(rule, ctx) {
 }
 
 // The hooks of the JS extension: the rules run in order, each on the selector
-// the previous one returned. A rule that fails keeps the selector it got.
+// the previous one returned. A rule that fails keeps the selector it got. Only
+// the selector of the Action changes; an Action without one is left alone.
 function pipeline(rules) {
   return {
     __recordingStarted: ({ context }) => installPresses(context),
-    __recordedSelector: async ({ selector, action, page, context }) => {
-      if (typeof page?.locator !== "function") return undefined;
+    __recordedAction: async ({ action, page, context }) => {
+      const { selector } = action;
+      if (typeof selector !== "string" || typeof page?.locator !== "function")
+        return undefined;
       let current = selector;
       for (const rule of rules) {
         try {
           const result = await applyRule(rule, {
             selector: current,
-            action,
+            action: { ...action, selector: current },
             page,
             context,
           });
@@ -531,7 +534,9 @@ function pipeline(rules) {
           );
         }
       }
-      return current === selector ? undefined : current;
+      return current === selector
+        ? undefined
+        : { ...action, selector: current };
     },
   };
 }
