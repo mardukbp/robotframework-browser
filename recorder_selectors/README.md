@@ -20,7 +20,6 @@ the one before:
 
 | Rule | Playwright records | The plugin records |
 | --- | --- | --- |
-| `label_click` (clicks only) | `text=/^\s*46\s+km\/h\s+bis\s+60\s+km\/h\s*$/` on the label of a radio | `role=radio[name="46 km/h bis 60 km/h"s]`, as its `Check Checkbox` |
 | `number_widening` | `internal:text="km/h bis 60 km/h"i` | `text="46 km/h bis 60 km/h"i` |
 | `title_description` (clicks only) | `role=button[name*="Close dialog"i]` | `role=button[description="Close"s]` |
 | `aria_label` | `#APD_\:\:SalesOrderType-inner-vhi` | `role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"` |
