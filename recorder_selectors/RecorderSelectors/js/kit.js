@@ -428,8 +428,10 @@ async function findsSame(page, candidate, selector) {
   );
 }
 
-// The recorded element: in the page, or at the press when the page lost it and
-// the press was on what the selector names.
+// The recorded element: in the page, or at the press when the page changed and
+// the press was on what the selector names. Playwright makes the selector find
+// only the element, so finding none or several means the page changed, for
+// example a click navigated to a page with more such elements.
 async function subjectOf({ page, selector }, chain, log) {
   const recorded = page.locator(selector);
   const count = await recorded.count();
@@ -437,7 +439,7 @@ async function subjectOf({ page, selector }, chain, log) {
     const handle = await recorded.elementHandle({ timeout: TIMEOUT_MS });
     return { el: await handle.evaluate(FACTS, false), handle };
   }
-  const press = count === 0 ? recentPress(page) : undefined;
+  const press = recentPress(page);
   const { target } = chain;
   const pressed =
     target.engine === "role" &&
