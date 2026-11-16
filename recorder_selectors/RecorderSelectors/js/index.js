@@ -3,7 +3,7 @@
 // recorded by its labels, on Playwright's own selector; then the selector rules
 // run, each on the selector the one before returned.
 
-const { pipeline, selectorStep, installPresses } = require("./kit.js");
+const { pipeline, selectorStep, install, PRESSES } = require("./kit.js");
 const scopeEngine = require("./scope.js");
 const selectLabels = require("./select_labels.js");
 
@@ -19,10 +19,10 @@ module.exports.__recordedAction = pipeline([
   ].map(selectorStep),
 ]);
 
-module.exports.__recordingStarted = async ({ context }) => {
-  await installPresses(context);
-  await selectLabels.install(context);
-};
+// Before the first recording in a context: the press snapshot and the chosen
+// labels are taken in the page.
+module.exports.__recordingStarted = ({ context }) =>
+  install(context, [PRESSES, selectLabels.pageScript]);
 
 // Called by the plugin when it is imported, so that recorded `scope=` selectors
 // also work when the tests run.
