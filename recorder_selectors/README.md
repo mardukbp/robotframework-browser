@@ -43,13 +43,32 @@ selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
 `Text`. Text in links, buttons and form controls is skipped, and so is text before an
 element with the same tag, role and name.
 
+## Select options by label
+
+Before the selector rules run, `js/select_labels.js` records a choice in a select by the
+labels of the chosen options instead of their values, which are often generated:
+
+| Playwright records | The plugin records |
+| --- | --- |
+| `Select Options By    id=make    value    14: 6792` | `Select Options By    id=make    label    AMELUNG` |
+
+Playwright reports the choice only after the page has handled it, and a page may relabel an
+option when it is chosen. So an init script, which runs in every frame before the page's
+own scripts, adds a capture listener for `input` at `window` that notes the label of each
+chosen option on the select. A value gets its label only when its option alone had that
+label then, and still has it, alone, when the Action arrives. When any value has no such
+label, all values stay, and the reason is logged with `recorder_selectors select_labels:`.
+In a page already open when the recording starts, the listener comes after the page's
+scripts, so a page listener at `window` in the capture phase could relabel unnoticed.
+
 ## Layout
 
 ```
 RecorderSelectors/
   __init__.py          the plugin: loads js/index.js, registers the scope engine
-  js/index.js          the JS extension: the rules, in order
+  js/index.js          the JS extension: select labels, then the rules, in order
   js/kit.js            what the rules share
+  js/select_labels.js  records a select by the labels of the chosen options
   js/scope.js          the scope selector engine
   js/rules/*.js        one rule per file
 ```
