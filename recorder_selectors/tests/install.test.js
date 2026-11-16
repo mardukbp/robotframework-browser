@@ -3,7 +3,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { install } = require("../RecorderSelectors/js/kit.js");
+const { install } = require("../RecorderSelectors/js/page_scripts.js");
 
 function fakeContext({ exposeError } = {}) {
   const calls = [];

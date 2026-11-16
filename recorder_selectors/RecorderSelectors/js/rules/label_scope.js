@@ -11,8 +11,8 @@ module.exports = {
   skip: ({ target, nth }) =>
     !nth &&
     (target.engine === "label" || (target.engine === "role" && nameOf(target))),
-  candidates: ({ el }) =>
-    el.isControl && !el.hasName && el.scopeText
-      ? [[role(el.role), scope(el.scopeText)]]
+  candidates: ({ facts }) =>
+    facts.isControl && !facts.hasName && facts.scopeText
+      ? [[role(facts.role), scope(facts.scopeText)]]
       : [],
 };

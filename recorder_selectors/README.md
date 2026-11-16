@@ -69,8 +69,9 @@ RecorderSelectors/
   js/index.js          the JS extension: select labels, then the rules, in order
   js/selector.js       selectors as data: parse, print, read and build parts (pure)
   js/page.js           what runs in the page: the facts about an element, the press snapshot
-  js/kit.js            runs the rules, checks their candidates in the page, installs page scripts
-  js/fp.js             a few Clojure-like helpers: assoc, some, reduceAsync, findAsync
+  js/run_rules.js      runs the rules on an Action and checks their candidates in the page
+  js/page_scripts.js   installs the scripts that run in the page, keeps what they report
+  js/fp.js             a few Clojure-like helpers: replaceAt, firstDefined, reduceAsync, ...
   js/select_labels.js  records a select by the labels of the chosen options
   js/scope.js          the scope selector engine
   js/rules/*.js        one rule per file
@@ -80,7 +81,7 @@ atest/                 acceptance tests, for robot, with their page and its serv
 
 ## Writing a rule
 
-A rule is a plain object; `js/kit.js` documents every field. A rule never writes selector
+A rule is a plain object; `js/run_rules.js` documents every field. A rule never writes selector
 syntax: `js/selector.js` parses a selector into parts, plain objects such as
 `{engine: "role", role: "link", attrs: [{key: "name", value: "Details", flag: "i", ...}]}`,
 and prints the parts a rule returns. Most rules only say which parts to try, given the facts
@@ -93,22 +94,22 @@ module.exports = {
   name: "label_scope",
   skip: ({ target, nth }) =>
     !nth && (target.engine === "label" || (target.engine === "role" && nameOf(target))),
-  candidates: ({ el }) =>
-    el.isControl && !el.hasName && el.scopeText
-      ? [[role(el.role), scope(el.scopeText)]]
+  candidates: ({ facts }) =>
+    facts.isControl && !facts.hasName && facts.scopeText
+      ? [[role(facts.role), scope(facts.scopeText)]]
       : [],
 };
 ```
 
-The kit runs it: it parses the selector into its chain, finds the recorded element, gathers
+`js/run_rules.js` runs it: it parses the selector into its chain, finds the recorded element, gathers
 its facts in the page, checks each candidate there and uses the first that finds only that
 element. When the recorded selector finds nothing any more, because the click navigated or
 removed the element, the facts and the check come from a snapshot taken when the element
 was pressed; only candidates of the form `role=...` or `role=... >> scope=...` can be
 checked that way. A rule that changes parts where they are instead, like `number_widening`,
 gives `eachPart`, the replacements for one part given the facts of the element the chain up
-to that part finds; the kit tries them part after part. Rules only compute with data, so
-they can be tested without a page; the kit does everything in the page.
+to that part finds; `run_rules.js` tries them part after part. Rules only compute with data,
+so they can be tested without a page; `run_rules.js` does everything that asks the page.
 
 Add the rule to the list in `js/index.js`. Functions that run in the page must use nothing
 from outside their own body, since Playwright sends them there as source text; `page.js`

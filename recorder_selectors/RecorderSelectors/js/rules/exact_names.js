@@ -12,7 +12,7 @@
 // own text nodes; when that does not find the element, the exact internal
 // form is used, which Browser writes as an anchored regular expression.
 
-const { assoc } = require("../fp.js");
+const { replaceAt } = require("../fp.js");
 const {
   nameOf,
   attributeOf,
@@ -21,19 +21,19 @@ const {
   text,
 } = require("../selector.js");
 
-const flat = (text) => (text || "").replace(/\s+/g, " ").trim();
+const normalizeSpace = (text) => (text || "").replace(/\s+/g, " ").trim();
 const isLoose = (text) => text && !text.exact;
 const descriptionOf = (part) => attributeOf(part, "description");
 const unique = (xs) => [...new Set(xs)];
 
 // The exact forms of a `role` part with the exact name `name`.
-function exactRoles(target, name, el) {
+function exactRoles(target, name, facts) {
   const named = withName(target, name, true);
   if (!isLoose(descriptionOf(target))) return [named];
   return [
     withAttribute(named, "description", undefined),
-    el.description &&
-      withAttribute(named, "description", el.description, true),
+    facts.description &&
+      withAttribute(named, "description", facts.description, true),
     named,
   ].filter(Boolean);
 }
@@ -50,16 +50,16 @@ module.exports = {
     const name = nameOf(target);
     return !name || (!isLoose(name) && !isLoose(descriptionOf(target)));
   },
-  candidates: ({ el, chain: { target, rest, targetIndex } }) => {
+  candidates: ({ facts, chain: { target, afterFrames, targetIndex } }) => {
     const names = unique(
-      [nameOf(target).value, el.name, el.text, ...el.texts]
-        .map(flat)
+      [nameOf(target).value, facts.name, facts.text, ...facts.texts]
+        .map(normalizeSpace)
         .filter(Boolean),
     );
     const exactParts =
       target.engine === "role"
-        ? names.flatMap((name) => exactRoles(target, name, el))
+        ? names.flatMap((name) => exactRoles(target, name, facts))
         : exactTexts(target, names);
-    return exactParts.map((exact) => assoc(rest, targetIndex, exact));
+    return exactParts.map((exact) => replaceAt(afterFrames, targetIndex, exact));
   },
 };

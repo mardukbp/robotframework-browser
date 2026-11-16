@@ -4,27 +4,27 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  assoc,
-  some,
+  replaceAt,
+  firstDefined,
   reduceAsync,
   findAsync,
   mapUntilAsync,
 } = require("../RecorderSelectors/js/fp.js");
 
 describe("fp", () => {
-  it("assoc gives a new array with one element replaced", () => {
+  it("replaceAt gives a new array with one element replaced", () => {
     const xs = [1, 2, 3];
-    assert.deepEqual(assoc(xs, 1, 9), [1, 9, 3]);
+    assert.deepEqual(replaceAt(xs, 1, 9), [1, 9, 3]);
     assert.deepEqual(xs, [1, 2, 3]);
   });
 
-  it("some gives the first defined result and calls nothing after it", () => {
+  it("firstDefined gives the first defined result and calls nothing after it", () => {
     const called = [];
     const f = (x) => (called.push(x), x > 1 ? x * 10 : undefined);
-    assert.equal(some([1, 2, 3], f), 20);
+    assert.equal(firstDefined([1, 2, 3], f), 20);
     assert.deepEqual(called, [1, 2]);
-    assert.equal(some([1], f), undefined);
-    assert.equal(some([0], () => null), null);
+    assert.equal(firstDefined([1], f), undefined);
+    assert.equal(firstDefined([0], () => null), null);
   });
 
   it("reduceAsync runs the steps one after the other", async () => {

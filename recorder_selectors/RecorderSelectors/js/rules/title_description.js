@@ -10,8 +10,8 @@ module.exports = {
   name: "title_description",
   actions: ["click"],
   skip: ({ target }) => target.engine !== "role" || !nameOf(target),
-  candidates: ({ el }) =>
-    el.role && el.title && el.title === el.text && !el.hasDescription
-      ? [[role(el.role, { description: el.title })]]
+  candidates: ({ facts }) =>
+    facts.role && facts.title && facts.title === facts.text && !facts.hasDescription
+      ? [[role(facts.role, { description: facts.title })]]
       : [],
 };

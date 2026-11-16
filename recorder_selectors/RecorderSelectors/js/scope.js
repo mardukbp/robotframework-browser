@@ -13,75 +13,86 @@
 
 const ENGINE_NAME = "scope";
 
-// Runs in the page: the scope text of `element`, or null.
+// Runs in the page: the scope text of `element`, or null. The closest ancestor
+// with a text before the element decides; a lookalike before the element ends
+// the search, since a text before it would not tell the two apart.
 function scopeOf(element) {
-  const SKIPPED =
+  // Elements whose text is never a scope: they are named by it themselves.
+  const NAMED_BY_THEIR_TEXT =
     "a, button, input, select, textarea, option, summary, " +
     "[role=link], [role=button], [role=checkbox], [role=radio], [role=tab], " +
     "[role=menuitem], [role=option], [role=combobox], [role=textbox], " +
     "script, style, template, noscript";
-  const flat = (text) => (text || "").replace(/\s+/g, " ").trim();
-  const visible = (e) => (e.checkVisibility ? e.checkVisibility() : true);
-  const keyOf = (e) =>
+  const document = element.ownerDocument;
+  const normalizeSpace = (text) => (text || "").replace(/\s+/g, " ").trim();
+  const precedes = (a, b) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  // --- lookalikes: elements with the same tag, role and name
+  const lookalikeKey = (e) =>
     [
       e.localName,
       e.getAttribute("role") || "",
-      flat(e.getAttribute("aria-label")) ||
-        flat(e.textContent) ||
-        flat(e.getAttribute("title")),
+      normalizeSpace(e.getAttribute("aria-label")) ||
+        normalizeSpace(e.textContent) ||
+        normalizeSpace(e.getAttribute("title")),
     ].join("\u0000");
-  const key = keyOf(element);
+  const elementKey = lookalikeKey(element);
   const isLookalike = (e) =>
     e !== element &&
     !e.contains(element) &&
     !element.contains(e) &&
-    keyOf(e) === key;
-  const isText = (e) =>
+    lookalikeKey(e) === elementKey;
+  const lastLookalikeBefore = (ancestor) =>
+    [...ancestor.getElementsByTagName(element.localName)]
+      .filter((e) => isLookalike(e) && precedes(e, element))
+      .at(-1);
+
+  // --- texts that can be a scope
+  const isVisible = (e) => (e.checkVisibility ? e.checkVisibility() : true);
+  const isScopeElement = (e) =>
     e &&
     !e.contains(element) &&
-    !e.closest(SKIPPED) &&
-    !e.querySelector(SKIPPED) &&
-    flat(e.textContent) !== "" &&
-    visible(e);
+    !e.closest(NAMED_BY_THEIR_TEXT) &&
+    !e.querySelector(NAMED_BY_THEIR_TEXT) &&
+    normalizeSpace(e.textContent) !== "" &&
+    isVisible(e);
+  // The text nodes of `root` before the element, in document order.
+  function* textNodesBefore(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node; (node = walker.nextNode()) && precedes(node, element); )
+      yield node;
+  }
 
-  const precedes = (a, b) =>
-    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-  const document = element.ownerDocument;
-
-  // The ancestors of `e` below the document element, the closest first.
+  // --- the search, from the closest ancestor up
   const ancestorsOf = (e) => {
     const parent = e.parentElement;
     return parent && parent !== document.documentElement
       ? [parent, ...ancestorsOf(parent)]
       : [];
   };
-  // The text nodes of `root` before the element, in document order.
-  function* textsBefore(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let node; (node = walker.nextNode()) && precedes(node, element); )
-      yield node;
-  }
-  // In `ancestor`: the scope text, null when there is none further up, or
-  // undefined to look further up.
+  // In `ancestor`: the scope text, null to stop the search, or undefined to
+  // look further up.
   const scopeIn = (ancestor) => {
-    const lookalike = [...ancestor.getElementsByTagName(element.localName)]
-      .filter((e) => isLookalike(e) && precedes(e, element))
-      .at(-1);
-    const scope = [...textsBefore(ancestor)]
+    const lookalike = lastLookalikeBefore(ancestor);
+    const scopeElement = [...textNodesBefore(ancestor)]
       .filter((node) => !lookalike || precedes(lookalike, node))
-      .filter((node) => flat(node.textContent) && isText(node.parentElement))
+      .filter(
+        (node) =>
+          normalizeSpace(node.textContent) && isScopeElement(node.parentElement),
+      )
       .at(-1)?.parentElement;
-    if (scope) return flat(scope.textContent);
+    if (scopeElement) return normalizeSpace(scopeElement.textContent);
     // Any text further up comes before the lookalike too.
     return lookalike ? null : undefined;
   };
-
-  return (
-    ancestorsOf(element).reduce(
+  const firstAnswer = (ancestors) =>
+    ancestors.reduce(
       (found, ancestor) => (found === undefined ? scopeIn(ancestor) : found),
       undefined,
-    ) ?? null
-  );
+    );
+
+  return firstAnswer(ancestorsOf(element)) ?? null;
 }
 
 // Runs in the page: the text a `scope=` selector asks for, quoted or not.
