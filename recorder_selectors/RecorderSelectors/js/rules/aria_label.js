@@ -9,7 +9,7 @@
 // The click may open a dialog that hides the form with aria-hidden, so the
 // candidates are checked with include-hidden.
 
-const { role, scope, nameOf } = require("../kit.js");
+const { role, scope, nameOf } = require("../selector.js");
 
 module.exports = {
   name: "aria_label",

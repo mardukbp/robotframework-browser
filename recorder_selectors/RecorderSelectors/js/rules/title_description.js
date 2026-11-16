@@ -4,7 +4,7 @@
 //   <button aria-label="Close dialog" title="Close">Close</button>
 //   role=button[name*="Close dialog"i]   becomes   role=button[description="Close"s]
 
-const { role, nameOf } = require("../kit.js");
+const { role, nameOf } = require("../selector.js");
 
 module.exports = {
   name: "title_description",

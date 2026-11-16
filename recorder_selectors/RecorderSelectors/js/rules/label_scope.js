@@ -4,7 +4,7 @@
 //   <td><span>Mittelgeber*</span><br><select name="...">...</select></td>
 //   css=select >> nth=3   becomes   role=combobox >> scope="Mittelgeber*"
 
-const { role, scope, nameOf } = require("../kit.js");
+const { role, scope, nameOf } = require("../selector.js");
 
 module.exports = {
   name: "label_scope",

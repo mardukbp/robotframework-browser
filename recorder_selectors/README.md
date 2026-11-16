@@ -67,7 +67,10 @@ scripts, so a page listener at `window` in the capture phase could relabel unnot
 RecorderSelectors/
   __init__.py          the plugin: loads js/index.js, registers the scope engine
   js/index.js          the JS extension: select labels, then the rules, in order
-  js/kit.js            what the rules share
+  js/selector.js       selectors as data: parse, print, read and build parts (pure)
+  js/page.js           what runs in the page: the facts about an element, the press snapshot
+  js/kit.js            runs the rules, checks their candidates in the page, installs page scripts
+  js/fp.js             a few Clojure-like helpers: assoc, some, reduceAsync, findAsync
   js/select_labels.js  records a select by the labels of the chosen options
   js/scope.js          the scope selector engine
   js/rules/*.js        one rule per file
@@ -78,13 +81,13 @@ atest/                 acceptance tests, for robot, with their page and its serv
 ## Writing a rule
 
 A rule is a plain object; `js/kit.js` documents every field. A rule never writes selector
-syntax: the kit parses a selector into parts, plain objects such as
+syntax: `js/selector.js` parses a selector into parts, plain objects such as
 `{engine: "role", role: "link", attrs: [{key: "name", value: "Details", flag: "i", ...}]}`,
 and prints the parts a rule returns. Most rules only say which parts to try, given the facts
 about the recorded element:
 
 ```js
-const { role, scope, nameOf } = require("../kit.js");
+const { role, scope, nameOf } = require("../selector.js");
 
 module.exports = {
   name: "label_scope",
@@ -108,7 +111,7 @@ to that part finds; the kit tries them part after part. Rules only compute with 
 they can be tested without a page; the kit does everything in the page.
 
 Add the rule to the list in `js/index.js`. Functions that run in the page must use nothing
-from outside their own body, since Playwright sends them there as source text; `kit.js`
+from outside their own body, since Playwright sends them there as source text; `page.js`
 puts the helpers of `elementFacts` inside its body for that reason.
 
 ## Limits

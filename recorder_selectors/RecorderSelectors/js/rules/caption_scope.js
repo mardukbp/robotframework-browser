@@ -7,7 +7,7 @@
 // A link may navigate away before the selector is checked; the kit then checks
 // it against the snapshot taken when the link was pressed.
 
-const { scope } = require("../kit.js");
+const { scope } = require("../selector.js");
 
 const lastIdPart = ({ rest }) => rest.findLastIndex(({ engine }) => engine === "id");
 

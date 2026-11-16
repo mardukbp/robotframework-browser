@@ -12,17 +12,19 @@
 // own text nodes; when that does not find the element, the exact internal
 // form is used, which Browser writes as an anchored regular expression.
 
+const { assoc } = require("../fp.js");
 const {
   nameOf,
   attributeOf,
   withName,
   withAttribute,
   text,
-} = require("../kit.js");
+} = require("../selector.js");
 
 const flat = (text) => (text || "").replace(/\s+/g, " ").trim();
 const isLoose = (text) => text && !text.exact;
 const descriptionOf = (part) => attributeOf(part, "description");
+const unique = (xs) => [...new Set(xs)];
 
 // The exact forms of a `role` part with the exact name `name`.
 function exactRoles(target, name, el) {
@@ -36,30 +38,28 @@ function exactRoles(target, name, el) {
   ].filter(Boolean);
 }
 
+// The exact forms of a `text` or `label` part: `text="..."` first, for a text.
+const exactTexts = (target, names) => [
+  ...(target.engine === "text" ? names.map(text) : []),
+  ...names.map((name) => withName(target, name, true)),
+];
+
 module.exports = {
   name: "exact_names",
   skip: ({ target }) => {
     const name = nameOf(target);
     return !name || (!isLoose(name) && !isLoose(descriptionOf(target)));
   },
-  candidates: ({ el, chain }) => {
-    const { target, rest, targetIndex } = chain;
-    const names = [
-      ...new Set(
-        [nameOf(target).value, el.name, el.text, ...el.texts]
-          .map(flat)
-          .filter(Boolean),
-      ),
-    ];
+  candidates: ({ el, chain: { target, rest, targetIndex } }) => {
+    const names = unique(
+      [nameOf(target).value, el.name, el.text, ...el.texts]
+        .map(flat)
+        .filter(Boolean),
+    );
     const exactParts =
       target.engine === "role"
         ? names.flatMap((name) => exactRoles(target, name, el))
-        : [
-            ...(target.engine === "text" ? names.map(text) : []),
-            ...names.map((name) => withName(target, name, true)),
-          ];
-    return exactParts.map((exact) =>
-      rest.map((part, i) => (i === targetIndex ? exact : part)),
-    );
+        : exactTexts(target, names);
+    return exactParts.map((exact) => assoc(rest, targetIndex, exact));
   },
 };

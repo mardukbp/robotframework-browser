@@ -3,49 +3,59 @@
 // "46 km/h bis 60 km/h" is recorded as `internal:text="km/h bis 60 km/h"i`. The
 // whole text is used when it still finds the same element and only it.
 
-const { nameOf, withName } = require("../kit.js");
+const { some } = require("../fp.js");
+const { nameOf, withName } = require("../selector.js");
 
 // Playwright keeps at most 80 characters of a text; a longer source was cut, not stripped.
 const MAX_SOURCE_LENGTH = 200;
-// The number Playwright strips, as its own patterns find it.
-const LEADING_NUMBER = /^([\d.,]+)[^.,\w]/;
-const TRAILING_NUMBER = /[^.,\w]([\d.,]+)$/;
+
+// Where Playwright drops a number, as its own patterns find it: the number,
+// the text without it, and the name with it again, joined by `space`.
+const ENDS = [
+  {
+    number: /^([\d.,]+)[^.,\w]/,
+    without: (full, number) => full.slice(number.length),
+    with: (name, number, space) => `${number}${space}${name}`,
+  },
+  {
+    number: /[^.,\w]([\d.,]+)$/,
+    without: (full, number) => full.slice(0, -number.length),
+    with: (name, number, space) => `${name}${space}${number}`,
+  },
+];
 
 const normalize = (text) => text.replace(/\s+/g, " ").trim();
 
+// The spellings of the space between number and text that a match may need: a
+// no-break space stays in an accessible name.
+const spacesAround = (text) => (/^\s|\s$/.test(text) ? [" ", " "] : [""]);
+
 // `name` with the number Playwright dropped from `source`, in every spelling of
-// the space between them that a match may need; none if it dropped none.
+// the space between them; none if it dropped none.
 function withNumber(name, source) {
   const full = normalize(source);
   const wanted = normalize(name);
   if (!wanted || full === wanted) return [];
-  // A no-break space between number and text stays in an accessible name.
-  const joined = (rest, glue) =>
-    /^\s|\s$/.test(rest) ? [glue(" "), glue(" ")] : [glue("")];
-  const leading = LEADING_NUMBER.exec(full);
-  if (leading) {
-    const rest = full.slice(leading[1].length);
-    if (normalize(rest) === wanted)
-      return joined(rest, (s) => `${leading[1]}${s}${name}`);
-  }
-  const trailing = TRAILING_NUMBER.exec(full);
-  if (trailing) {
-    const rest = full.slice(0, full.length - trailing[1].length);
-    if (normalize(rest) === wanted)
-      return joined(rest, (s) => `${name}${s}${trailing[1]}`);
-  }
-  return [];
+  const widened = (end) => {
+    const number = end.number.exec(full)?.[1];
+    const rest = number && end.without(full, number);
+    return rest && normalize(rest) === wanted
+      ? spacesAround(rest).map((space) => end.with(name, number, space))
+      : undefined;
+  };
+  return some(ENDS, widened) ?? [];
 }
+
+const unique = (xs) => [...new Set(xs)];
 
 module.exports = {
   name: "number_widening",
   skip: ({ parts }) => !parts.some(nameOf),
   skipPart: (part) => !nameOf(part),
-  eachPart: ({ part, el }) => {
-    const sources = el.texts.filter((text) => text.length <= MAX_SOURCE_LENGTH);
-    const names = new Set(
-      sources.flatMap((source) => withNumber(nameOf(part).value, source)),
-    );
-    return [...names].map((name) => withName(part, name));
-  },
+  eachPart: ({ part, el }) =>
+    unique(
+      el.texts
+        .filter((text) => text.length <= MAX_SOURCE_LENGTH)
+        .flatMap((source) => withNumber(nameOf(part).value, source)),
+    ).map((name) => withName(part, name)),
 };
