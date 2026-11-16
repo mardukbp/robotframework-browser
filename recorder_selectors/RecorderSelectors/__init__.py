@@ -20,9 +20,6 @@ class RecorderSelectors(LibraryComponent):
 
     Every recorded or picked selector passes these rules, in this order:
 
-    - A click on the label of a form control is recorded by the control's
-      selector, the one its ``Check Checkbox`` or ``Fill Text`` gets:
-      ``role=radio[name="46 km/h bis 60 km/h"s]``.
     - A number Playwright drops at the start or end of a text is given back:
       ``text="km/h bis 60 km/h"`` becomes ``text="46 km/h bis 60 km/h"``.
     - A clicked element whose title equals its text, and is unique on the
