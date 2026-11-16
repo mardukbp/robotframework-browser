@@ -16,9 +16,14 @@ exports.startRecordingHooks = async (page) => {
   await plugin.__recordingStarted({ context: page.context() });
 };
 
-exports.recordedAction = async (action, page) =>
-  (await plugin.__recordedAction({ action, page, context: page.context() })) ??
-  action;
+// The Action the plugin records for `action`: the one its hook gives, or
+// `action` itself when the hook keeps it.
+exports.recordedAction = async (action, page) => {
+  const context = page.context();
+  const changed = await plugin.__recordedAction({ action, page, context });
+  if (changed === undefined) return action;
+  return changed;
+};
 
 exports.actionsSeen = () => seen;
 

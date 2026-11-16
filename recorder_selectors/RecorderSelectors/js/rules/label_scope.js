@@ -6,13 +6,17 @@
 
 const { role, scope, nameOf } = require("../selector.js");
 
-module.exports = {
-  name: "label_scope",
-  skip: ({ target, nth }) =>
-    !nth &&
-    (target.engine === "label" || (target.engine === "role" && nameOf(target))),
-  candidates: ({ facts }) =>
-    facts.isControl && !facts.hasName && facts.scopeText
-      ? [[role(facts.role), scope(facts.scopeText)]]
-      : [],
-};
+// A selector by a label, or by a role and a name, is kept, unless it needed `nth=`.
+function skip({ target, nth }) {
+  if (nth) return false;
+  if (target.engine === "label") return true;
+  return target.engine === "role" && Boolean(nameOf(target));
+}
+
+function candidates({ facts }) {
+  if (!facts.isControl || facts.hasName) return [];
+  if (!facts.scopeText) return [];
+  return [[role(facts.role), scope(facts.scopeText)]];
+}
+
+module.exports = { name: "label_scope", skip, candidates };

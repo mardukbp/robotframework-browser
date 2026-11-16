@@ -13,10 +13,16 @@ const CLICKABLE =
 // finds the element. With `withPeers`, also the elements with the same role, to
 // check candidates against when the page is gone.
 function elementFacts(element, withPeers) {
-  const normalizeSpace = (text) => (text || "").replace(/\s+/g, " ").trim();
-  const attributeText = (e, name) => normalizeSpace(e.getAttribute(name));
+  function normalizeSpace(text) {
+    return (text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function attributeText(e, name) {
+    return normalizeSpace(e.getAttribute(name));
+  }
 
   // --- roles
+
   const CONTROLS =
     "input:not([type=hidden]), textarea, select, [role=combobox], " +
     "[role=textbox], [role=searchbox], [role=spinbutton], [role=listbox], " +
@@ -33,65 +39,122 @@ function elementFacts(element, withPeers) {
     search: "searchbox",
     hidden: "",
   };
-  const linkRole = (e) => (e.hasAttribute("href") ? "link" : "");
-  const headingRole = () => "heading";
-  const IMPLICIT_ROLES = {
-    a: linkRole,
-    area: linkRole,
-    button: () => "button",
-    select: (e) => (e.multiple || e.size > 1 ? "listbox" : "combobox"),
-    textarea: () => "textbox",
-    h1: headingRole,
-    h2: headingRole,
-    h3: headingRole,
-    h4: headingRole,
-    h5: headingRole,
-    h6: headingRole,
-    input: (e) =>
-      INPUT_ROLES[(e.getAttribute("type") || "text").toLowerCase()] ??
-      (e.hasAttribute("list") ? "combobox" : "textbox"),
-  };
-  const explicitRoleOf = (e) => attributeText(e, "role").split(" ")[0];
-  const roleOf = (e) =>
-    explicitRoleOf(e) || IMPLICIT_ROLES[e.localName]?.(e) || "";
+
+  function roleOf(e) {
+    const explicit = explicitRoleOf(e);
+    if (explicit) return explicit;
+    return implicitRoleOf(e);
+  }
+
+  function explicitRoleOf(e) {
+    return attributeText(e, "role").split(" ")[0];
+  }
+
+  function implicitRoleOf(e) {
+    const tag = e.localName;
+    if (tag === "a" || tag === "area") {
+      if (e.hasAttribute("href")) return "link";
+      return "";
+    }
+    if (tag === "button") return "button";
+    if (tag === "textarea") return "textbox";
+    if (/^h[1-6]$/.test(tag)) return "heading";
+    if (tag === "select") {
+      if (e.multiple || e.size > 1) return "listbox";
+      return "combobox";
+    }
+    if (tag === "input") return inputRoleOf(e);
+    return "";
+  }
+
+  function inputRoleOf(input) {
+    const type = (input.getAttribute("type") || "text").toLowerCase();
+    if (type in INPUT_ROLES) return INPUT_ROLES[type];
+    if (input.hasAttribute("list")) return "combobox";
+    return "textbox";
+  }
 
   // --- names and descriptions
-  const textsOfIdsIn = (e, name) =>
-    (e.getAttribute(name) || "")
-      .split(/\s+/)
-      .map((id) => id && e.getRootNode().getElementById?.(id))
+
+  function textsOfIdsIn(e, name) {
+    const ids = (e.getAttribute(name) || "").split(/\s+/).filter(Boolean);
+    return ids
+      .map((id) => e.getRootNode().getElementById?.(id))
       .filter(Boolean)
       .map((referenced) => referenced.textContent);
-  const labelTextsOf = (e) =>
-    [...(e.labels || [])].map((label) => label.textContent);
-  const isFormField = (e) =>
-    ["input", "select", "textarea"].includes(e.localName);
+  }
+
+  function labelTextsOf(e) {
+    return [...(e.labels || [])].map((label) => label.textContent);
+  }
+
+  function isFormField(e) {
+    return ["input", "select", "textarea"].includes(e.localName);
+  }
+
   // The name from everything but the title, which names an element only when
   // nothing else does.
-  const nameBeforeTitleOf = (e) =>
-    normalizeSpace(textsOfIdsIn(e, "aria-labelledby").join(" ")) ||
-    attributeText(e, "aria-label") ||
-    normalizeSpace(labelTextsOf(e).join(" ")) ||
-    (isFormField(e) ? "" : normalizeSpace(e.textContent));
-  const nameOf = (e) =>
-    nameBeforeTitleOf(e) ||
-    attributeText(e, "title") ||
-    attributeText(e, "alt") ||
-    attributeText(e, "placeholder");
+  function nameBeforeTitleOf(e) {
+    const labelledBy = normalizeSpace(textsOfIdsIn(e, "aria-labelledby").join(" "));
+    if (labelledBy) return labelledBy;
+    const ariaLabel = attributeText(e, "aria-label");
+    if (ariaLabel) return ariaLabel;
+    const labels = normalizeSpace(labelTextsOf(e).join(" "));
+    if (labels) return labels;
+    if (isFormField(e)) return "";
+    return normalizeSpace(e.textContent);
+  }
+
+  function nameOf(e) {
+    return (
+      nameBeforeTitleOf(e) ||
+      attributeText(e, "title") ||
+      attributeText(e, "alt") ||
+      attributeText(e, "placeholder")
+    );
+  }
+
   // The title describes an element whenever something else names it.
-  const descriptionOf = (e) =>
-    normalizeSpace(textsOfIdsIn(e, "aria-describedby").join(" ")) ||
-    attributeText(e, "aria-description") ||
-    (nameBeforeTitleOf(e) ? attributeText(e, "title") : "");
+  function descriptionOf(e) {
+    const describedBy = normalizeSpace(
+      textsOfIdsIn(e, "aria-describedby").join(" "),
+    );
+    if (describedBy) return describedBy;
+    const ariaDescription = attributeText(e, "aria-description");
+    if (ariaDescription) return ariaDescription;
+    if (nameBeforeTitleOf(e)) return attributeText(e, "title");
+    return "";
+  }
+
+  // Every text the element may be found by, as it is in the page.
+  function textsOf(e) {
+    const labelledBy = textsOfIdsIn(e, "aria-labelledby");
+    const attributes = ["aria-label", "title", "alt", "placeholder"].map(
+      (name) => e.getAttribute(name),
+    );
+    const texts = [
+      e.textContent,
+      ...labelTextsOf(e),
+      ...attributes,
+      ...labelledBy,
+      labelledBy.join(" "),
+    ];
+    return texts.filter((text) => typeof text === "string" && text.trim() !== "");
+  }
 
   // --- peers: the elements with the element's role, also in shadow roots
-  const allElementsIn = (root) =>
-    [...root.querySelectorAll("*")].flatMap((e) => [
-      e,
-      ...(e.shadowRoot ? allElementsIn(e.shadowRoot) : []),
-    ]);
-  const peersWithRole = (role) =>
-    allElementsIn(element.ownerDocument)
+
+  function allElementsIn(root) {
+    const elements = [];
+    for (const e of root.querySelectorAll("*")) {
+      elements.push(e);
+      if (e.shadowRoot) elements.push(...allElementsIn(e.shadowRoot));
+    }
+    return elements;
+  }
+
+  function peersWithRole(role) {
+    return allElementsIn(element.ownerDocument)
       .filter((e) => roleOf(e) === role)
       .map((e) => ({
         role,
@@ -100,14 +163,15 @@ function elementFacts(element, withPeers) {
         scopeText: scopeOf(e),
         isTarget: e === element,
       }));
+  }
 
   // --- the facts
+
   const role = roleOf(element);
-  const labelledBy = textsOfIdsIn(element, "aria-labelledby");
   const ariaLabel = attributeText(element, "aria-label");
   const hasLabelledBy = element.hasAttribute("aria-labelledby");
   const hasLabel = labelTextsOf(element).length > 0;
-  return {
+  const facts = {
     tag: element.localName,
     role,
     explicitRole: explicitRoleOf(element),
@@ -124,18 +188,10 @@ function elementFacts(element, withPeers) {
       element.hasAttribute("aria-description"),
     isControl: element.matches(CONTROLS),
     scopeText: scopeOf(element),
-    // Every text the element may be found by, as it is in the page.
-    texts: [
-      element.textContent,
-      ...labelTextsOf(element),
-      ...["aria-label", "title", "alt", "placeholder"].map((name) =>
-        element.getAttribute(name),
-      ),
-      ...labelledBy,
-      labelledBy.join(" "),
-    ].filter((text) => typeof text === "string" && text.trim() !== ""),
-    ...(withPeers && role ? { peers: peersWithRole(role) } : {}),
+    texts: textsOf(element),
   };
+  if (!withPeers || !role) return facts;
+  return { ...facts, peers: peersWithRole(role) };
 }
 
 // `fn` with `helpers` defined inside its body, so it can run in the page.
@@ -156,26 +212,31 @@ const ELEMENT_FACTS = withHelpersInside(elementFacts, { scopeOf });
 function reportPresses(binding, clickable, elementFacts) {
   if (window.__rfbRecorderSelectorsInstalled) return;
   window.__rfbRecorderSelectorsInstalled = true;
-  const pressedElement = (event) => {
+
+  function pressedElement(event) {
+    if (!event.isTrusted) return undefined;
     const path = event.composedPath().filter((node) => node instanceof Element);
-    const onOverlay = path.some((e) => e.localName === "x-pw-glass");
-    return event.isTrusted && !onOverlay
-      ? path.find((e) => e.matches(clickable)) || path[0]
-      : undefined;
-  };
-  const report = (event) => {
+    if (path.some((e) => e.localName === "x-pw-glass")) return undefined;
+    return path.find((e) => e.matches(clickable)) || path[0];
+  }
+
+  function report(event) {
     const element = pressedElement(event);
+    if (!element) return;
     try {
-      if (element) window[binding](elementFacts(element, true));
+      window[binding](elementFacts(element, true));
     } catch {
       // A page that blocks the binding records without the snapshot.
     }
-  };
+  }
+
   window.addEventListener("pointerdown", report, true);
 }
 
 // The source that reports every press through the binding `binding`.
-const pressScript = (binding) =>
-  `(${reportPresses})(${JSON.stringify(binding)}, ${JSON.stringify(CLICKABLE)}, ${ELEMENT_FACTS});`;
+function pressScript(binding) {
+  const args = [JSON.stringify(binding), JSON.stringify(CLICKABLE), ELEMENT_FACTS];
+  return `(${reportPresses})(${args.join(", ")});`;
+}
 
 module.exports = { ELEMENT_FACTS, pressScript };

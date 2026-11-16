@@ -25,11 +25,21 @@ const DROPPED_NUMBERS = [
   },
 ];
 
-const normalizeSpace = (text) => text.replace(/\s+/g, " ").trim();
+// Only a chain with a name or text in it.
+function skip({ parts }) {
+  return !parts.some(nameOf);
+}
 
-// The spellings of the space between number and text that a match may need: a
-// no-break space stays in an accessible name.
-const spacesAround = (text) => (/^\s|\s$/.test(text) ? [" ", " "] : [""]);
+function skipPart(part) {
+  return !nameOf(part);
+}
+
+// The part with each name that gives back the number Playwright dropped.
+function eachPart({ part, facts }) {
+  const sources = facts.texts.filter((text) => text.length <= MAX_SOURCE_LENGTH);
+  const names = sources.flatMap((source) => withNumber(nameOf(part).value, source));
+  return [...new Set(names)].map((name) => withName(part, name));
+}
 
 // `name` with the number Playwright dropped from `source`, in every spelling of
 // the space between them; none if it dropped none.
@@ -37,28 +47,31 @@ function withNumber(name, source) {
   const full = normalizeSpace(source);
   const wanted = normalizeSpace(name);
   if (!wanted || full === wanted) return [];
-  const restored = (dropped) => {
-    const number = dropped.number.exec(full)?.[1];
-    const stripped = number && dropped.strip(full, number);
-    return stripped && normalizeSpace(stripped) === wanted
-      ? spacesAround(stripped).map((space) =>
-          dropped.restore(name, number, space),
-        )
-      : undefined;
-  };
-  return firstDefined(DROPPED_NUMBERS, restored) ?? [];
+  const restored = firstDefined(DROPPED_NUMBERS, (dropped) =>
+    restoreNumber(dropped, full, name, wanted),
+  );
+  return restored ?? [];
 }
 
-const unique = (xs) => [...new Set(xs)];
+// The names with the number `dropped` finds in `full`, when stripping it leaves
+// `wanted`; undefined otherwise.
+function restoreNumber(dropped, full, name, wanted) {
+  const number = dropped.number.exec(full)?.[1];
+  if (!number) return undefined;
+  const stripped = dropped.strip(full, number);
+  if (!stripped || normalizeSpace(stripped) !== wanted) return undefined;
+  return spacesAround(stripped).map((space) => dropped.restore(name, number, space));
+}
 
-module.exports = {
-  name: "number_widening",
-  skip: ({ parts }) => !parts.some(nameOf),
-  skipPart: (part) => !nameOf(part),
-  eachPart: ({ part, facts }) =>
-    unique(
-      facts.texts
-        .filter((text) => text.length <= MAX_SOURCE_LENGTH)
-        .flatMap((source) => withNumber(nameOf(part).value, source)),
-    ).map((name) => withName(part, name)),
-};
+// The spellings of the space between number and text that a match may need: a
+// no-break space stays in an accessible name.
+function spacesAround(text) {
+  if (/^\s|\s$/.test(text)) return [" ", "\u00a0"];
+  return [""];
+}
+
+function normalizeSpace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+module.exports = { name: "number_widening", skip, skipPart, eachPart };

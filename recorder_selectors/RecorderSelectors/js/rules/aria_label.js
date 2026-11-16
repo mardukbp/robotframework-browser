@@ -11,15 +11,25 @@
 
 const { role, scope, nameOf } = require("../selector.js");
 
+// A selector Playwright already made from a role and a name is kept, unless it
+// needed `nth=`.
+function skip({ target, nth }) {
+  if (nth) return false;
+  return target.engine === "role" && Boolean(nameOf(target));
+}
+
+function candidates({ facts }) {
+  if (!facts.explicitRole || !facts.ariaLabel) return [];
+  if (facts.hasLabelledBy) return [];
+  const named = role(facts.explicitRole, { name: facts.ariaLabel });
+  if (!facts.scopeText) return [[named]];
+  return [[named], [named, scope(facts.scopeText)]];
+}
+
 module.exports = {
   name: "aria_label",
-  skip: ({ target, nth }) =>
-    !nth && target.engine === "role" && Boolean(nameOf(target)),
+  skip,
   includeHidden: true,
   fallback: "nth",
-  candidates: ({ facts }) => {
-    if (!facts.explicitRole || !facts.ariaLabel || facts.hasLabelledBy) return [];
-    const named = role(facts.explicitRole, { name: facts.ariaLabel });
-    return [[named], facts.scopeText && [named, scope(facts.scopeText)]];
-  },
+  candidates,
 };
