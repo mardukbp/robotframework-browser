@@ -16,6 +16,10 @@
 //               a click that hides the page behind a dialog.
 //   fallback    optional: "nth" uses the first candidate with `>> nth=<index>`
 //               when no candidate finds only the element.
+//   retarget    optional: `(element) => element | null`, run in the page: the
+//               element the candidates must find instead of the recorded one,
+//               such as the control of a clicked label; null leaves the
+//               selector alone. Needs the page, so no snapshot is used.
 //   rewrite     instead of `candidates`: `async ({ selector, action, page,
 //               context, chain, log }) => selector | undefined`, for a rule that
 //               transforms the selector rather than replacing it.
@@ -456,6 +460,21 @@ async function matchOf(subject, page, frames, parts, includeHidden) {
   return { count, index };
 }
 
+// The element `rule.retarget` gives for the recorded one, with its facts.
+async function retargeted(subject, rule) {
+  if (!subject?.handle) return undefined;
+  try {
+    const other = (
+      await subject.handle.evaluateHandle(rule.retarget)
+    ).asElement();
+    return other
+      ? { el: await other.evaluate(FACTS, false), handle: other }
+      : undefined;
+  } finally {
+    await subject.handle.dispose();
+  }
+}
+
 async function applyRule(rule, ctx) {
   if (rule.actions && !rule.actions.includes(ctx.action?.name))
     return undefined;
@@ -465,7 +484,8 @@ async function applyRule(rule, ctx) {
     console.log(`recorder_selectors ${rule.name}: ${message}`);
   if (rule.rewrite) return rule.rewrite({ ...ctx, chain, log });
 
-  const subject = await subjectOf(ctx, chain, log);
+  const recorded = await subjectOf(ctx, chain, log);
+  const subject = rule.retarget ? await retargeted(recorded, rule) : recorded;
   if (!subject) return undefined;
   try {
     const candidates = (

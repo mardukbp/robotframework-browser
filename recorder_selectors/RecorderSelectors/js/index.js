@@ -5,6 +5,7 @@ const { pipeline } = require("./kit.js");
 const scopeEngine = require("./scope.js");
 
 module.exports = pipeline([
+  require("./rules/label_click.js"),
   require("./rules/number_widening.js"),
   require("./rules/title_description.js"),
   require("./rules/aria_label.js"),
