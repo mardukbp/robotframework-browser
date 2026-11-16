@@ -4,21 +4,23 @@
 //   [id="#category--12-content"] >> role=link[name*="RFCP® Robot Framework®"i]
 //   becomes   role=link[name*="RFCP® Robot Framework®"i] >> scope="Robot Framework"
 //
-// A link may navigate away before the selector is checked; the kit then checks
-// it against the snapshot taken when the link was pressed.
+// A link may navigate away before the selector is checked; run_rules.js then
+// checks it against the snapshot taken when the link was pressed.
 
 const { scope } = require("../selector.js");
 
-const lastIdPart = ({ rest }) => rest.findLastIndex(({ engine }) => engine === "id");
+// The index of the last part that finds an element by its id.
+const lastIdPart = ({ afterFrames }) =>
+  afterFrames.findLastIndex(({ engine }) => engine === "id");
 
 module.exports = {
   name: "caption_scope",
   skip: (chain) => {
     const index = lastIdPart(chain);
-    return index === -1 || index === chain.rest.length - 1;
+    return index === -1 || index === chain.afterFrames.length - 1;
   },
-  candidates: ({ el, chain }) =>
-    el.scopeText
-      ? [[...chain.rest.slice(lastIdPart(chain) + 1), scope(el.scopeText)]]
+  candidates: ({ facts, chain }) =>
+    facts.scopeText
+      ? [[...chain.afterFrames.slice(lastIdPart(chain) + 1), scope(facts.scopeText)]]
       : [],
 };

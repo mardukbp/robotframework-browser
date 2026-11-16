@@ -17,9 +17,9 @@ module.exports = {
     !nth && target.engine === "role" && Boolean(nameOf(target)),
   includeHidden: true,
   fallback: "nth",
-  candidates: ({ el }) => {
-    if (!el.explicitRole || !el.ariaLabel || el.hasLabelledBy) return [];
-    const named = role(el.explicitRole, { name: el.ariaLabel });
-    return [[named], el.scopeText && [named, scope(el.scopeText)]];
+  candidates: ({ facts }) => {
+    if (!facts.explicitRole || !facts.ariaLabel || facts.hasLabelledBy) return [];
+    const named = role(facts.explicitRole, { name: facts.ariaLabel });
+    return [[named], facts.scopeText && [named, scope(facts.scopeText)]];
   },
 };

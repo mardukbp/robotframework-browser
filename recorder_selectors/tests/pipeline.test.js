@@ -3,7 +3,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { pipeline, selectorStep } = require("../RecorderSelectors/js/kit.js");
+const { pipeline, selectorStep } = require("../RecorderSelectors/js/run_rules.js");
 
 const step = (name, run) => ({ name, run });
 const click = { name: "click", selector: "#a" };

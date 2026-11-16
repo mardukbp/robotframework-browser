@@ -4,7 +4,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const kit = require("../RecorderSelectors/js/selector.js");
+const selector = require("../RecorderSelectors/js/selector.js");
 const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
@@ -12,9 +12,9 @@ const labelScope = require("../RecorderSelectors/js/rules/label_scope.js");
 const numberWidening = require("../RecorderSelectors/js/rules/number_widening.js");
 const titleDescription = require("../RecorderSelectors/js/rules/title_description.js");
 
-const { parse, parsePart, print, nameOf, attributeOf, withName } = kit;
-const candidates = (rule, selector, el) =>
-  rule.candidates({ el, chain: parse(selector) }).filter(Boolean).map(print);
+const { parse, parsePart, print, nameOf, attributeOf, withName } = selector;
+const candidates = (rule, recorded, facts) =>
+  rule.candidates({ facts, chain: parse(recorded) }).filter(Boolean).map(print);
 
 describe("parse and print", () => {
   for (const selector of [
@@ -94,18 +94,18 @@ describe("reading and changing parts", () => {
   });
 
   it("builds parts in Browser's syntax", () => {
-    assert.equal(print([kit.role("button", { name: "Save" })]), 'role=button[name="Save"s]');
-    assert.equal(print([kit.role("combobox"), kit.scope("Make*")]), 'role=combobox >> scope="Make*"');
-    assert.equal(print([kit.text('a "b"')]), 'text="a \\"b\\""');
+    assert.equal(print([selector.role("button", { name: "Save" })]), 'role=button[name="Save"s]');
+    assert.equal(print([selector.role("combobox"), selector.scope("Make*")]), 'role=combobox >> scope="Make*"');
+    assert.equal(print([selector.text('a "b"')]), 'text="a \\"b\\""');
   });
 });
 
 describe("rules", () => {
   it("exact_names makes the name exact and drops a loose description", () => {
-    const el = { name: "Details & Termine", text: "Details & Termine", texts: [], description: "" };
+    const facts = { name: "Details & Termine", text: "Details & Termine", texts: [], description: "" };
     const selector = 'internal:role=link[name="Details"i][description="x"i] >> scope="Robot Framework"';
     assert.equal(exactNames.skip(parse(selector)), false);
-    assert.deepEqual(candidates(exactNames, selector, el), [
+    assert.deepEqual(candidates(exactNames, selector, facts), [
       'role=link[name="Details"s] >> scope="Robot Framework"',
       'role=link[name="Details"s][description="x"i] >> scope="Robot Framework"',
       'role=link[name="Details & Termine"s] >> scope="Robot Framework"',
@@ -114,8 +114,8 @@ describe("rules", () => {
   });
 
   it("exact_names tries a text as text= first", () => {
-    const el = { name: "46 km/h", text: "46 km/h", texts: [] };
-    assert.deepEqual(candidates(exactNames, 'internal:text="km/h"i', el), [
+    const facts = { name: "46 km/h", text: "46 km/h", texts: [] };
+    assert.deepEqual(candidates(exactNames, 'internal:text="km/h"i', facts), [
       'text="km/h"',
       'text="46 km/h"',
       'internal:text="km/h"s',
@@ -125,8 +125,8 @@ describe("rules", () => {
   });
 
   it("label_scope scopes a control without a name by its caption", () => {
-    const el = { isControl: true, hasName: false, scopeText: "Mittelgeber*", role: "combobox" };
-    assert.deepEqual(candidates(labelScope, "css=select >> nth=3", el), [
+    const facts = { isControl: true, hasName: false, scopeText: "Mittelgeber*", role: "combobox" };
+    assert.deepEqual(candidates(labelScope, "css=select >> nth=3", facts), [
       'role=combobox >> scope="Mittelgeber*"',
     ]);
     assert.ok(labelScope.skip(parse('internal:role=combobox[name="A"i]')));
@@ -141,8 +141,8 @@ describe("rules", () => {
   });
 
   it("aria_label records an explicit role by its aria-label, then scoped", () => {
-    const el = { explicitRole: "button", ariaLabel: "Wertehilfe", hasLabelledBy: false, scopeText: "Art" };
-    assert.deepEqual(candidates(ariaLabel, "#vhi", el), [
+    const facts = { explicitRole: "button", ariaLabel: "Wertehilfe", hasLabelledBy: false, scopeText: "Art" };
+    assert.deepEqual(candidates(ariaLabel, "#vhi", facts), [
       'role=button[name="Wertehilfe"s]',
       'role=button[name="Wertehilfe"s] >> scope="Art"',
     ]);
@@ -150,20 +150,20 @@ describe("rules", () => {
 
   it("number_widening gives a text back the number Playwright dropped", () => {
     const part = parsePart('internal:text="km/h bis 60 km/h"i');
-    const el = { texts: ["46 km/h bis 60 km/h", "x".repeat(300)] };
+    const facts = { texts: ["46 km/h bis 60 km/h", "x".repeat(300)] };
     // Both spellings of the space after the number: a no-break space stays in a name.
-    assert.deepEqual(numberWidening.eachPart({ part, el }).map((p) => print([p])), [
+    assert.deepEqual(numberWidening.eachPart({ part, facts }).map((p) => print([p])), [
       'internal:text="46 km/h bis 60 km/h"i',
       'internal:text="46 km/h bis 60 km/h"i',
     ]);
-    assert.deepEqual(numberWidening.eachPart({ part, el: { texts: ["km/h bis 60 km/h"] } }), []);
+    assert.deepEqual(numberWidening.eachPart({ part, facts: { texts: ["km/h bis 60 km/h"] } }), []);
     assert.ok(numberWidening.skipPart(parsePart("css=div")));
   });
 
   it("title_description records a clicked element by a title equal to its text", () => {
-    const el = { role: "button", title: "Close", text: "Close", hasDescription: false };
+    const facts = { role: "button", title: "Close", text: "Close", hasDescription: false };
     const selector = 'internal:role=button[name="Close dialog"i]';
     assert.deepEqual(titleDescription.actions, ["click"]);
-    assert.deepEqual(candidates(titleDescription, selector, el), ['role=button[description="Close"s]']);
+    assert.deepEqual(candidates(titleDescription, selector, facts), ['role=button[description="Close"s]']);
   });
 });
