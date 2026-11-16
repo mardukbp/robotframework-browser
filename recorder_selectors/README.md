@@ -30,7 +30,10 @@ the one before:
 `exact_names` comes last: the name or text the selector finds its element by, after the
 `scope=` and `nth=` filters, is made an exact match with the element's whole name, so the
 other rules' results end up exact too, for example
-`role=link[name="Details & Termine"s] >> scope="Robot Framework"`.
+`role=link[name="Details & Termine"s] >> scope="Robot Framework"`. A text becomes
+`text="46 km/h bis 60 km/h"` when that finds the element, which holds the text in its own
+text nodes; otherwise it stays the exact internal form, which Browser writes as an anchored
+regular expression such as `text=/^\s*46\s+km\/h\s+bis\s+60\s+km\/h\s*$/`.
 
 A rewritten selector is used only when it finds exactly the recorded element; otherwise the
 selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
