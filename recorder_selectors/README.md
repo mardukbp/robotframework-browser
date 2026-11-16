@@ -10,7 +10,7 @@ Library    Browser    plugins=RecorderSelectors
 ```
 
 The plugin has no keywords. It loads one JS extension that uses the recorder hooks of
-Browser (`__recordedSelector`, `__recordingStarted`; see `Record Keyword`) and registers
+Browser (`__recordedAction`, `__recordingStarted`; see `Record Keyword`) and registers
 the `scope` selector engine, so the selectors it records also work when the tests run.
 
 ## Rules
