@@ -71,6 +71,8 @@ RecorderSelectors/
   js/select_labels.js  records a select by the labels of the chosen options
   js/scope.js          the scope selector engine
   js/rules/*.js        one rule per file
+tests/                 unit tests, for node --test
+atest/                 acceptance tests, for robot, with their page and its server
 ```
 
 ## Writing a rule
@@ -120,15 +122,23 @@ puts the helpers of `elementFacts` inside its body for that reason.
 
 ## Tests
 
-The unit tests of the selector data and of the rules are in `tests/`, for `node --test`;
-`utest/test_recorder_selectors_js.py` runs them with the Python unit tests:
+Everything the tests need is in this folder; they need only Browser installed, with its
+browsers (`rfbrowser init`), and Node.js. Run them from this folder.
+
+The unit tests of the selector data, the rules, the chain of steps and the installer are in
+`tests/`, for Node's own test runner:
 
 ```
-node --test "recorder_selectors/tests/*.test.js"
+node --test "tests/*.test.js"
 ```
 
-The acceptance tests are in `atest/test/09_Plugins/recorder_selectors/`:
+The acceptance tests are in `atest/`. `atest/__init__.robot` serves `atest/pages/` on a free
+port with `atest/PageServer.py`, at `localhost` and `127.0.0.1`, so a test can put a page of
+another origin in an iframe; each test adds the elements it records to that blank page.
 
 ```
-inv atest --suite "Recorder Selectors"
+robot --outputdir atest/output atest
 ```
+
+The recorder needs a visible browser; the suites allow it headless through
+`recorder_allows_headless` of the Browser library instance.
