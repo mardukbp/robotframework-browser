@@ -100,8 +100,10 @@ its facts in the page, checks each candidate there and uses the first that finds
 element. When the recorded selector finds nothing any more, because the click navigated or
 removed the element, the facts and the check come from a snapshot taken when the element
 was pressed; only candidates of the form `role=...` or `role=... >> scope=...` can be
-checked that way. A rule that transforms the selector instead, like `number_widening`,
-gives a `rewrite` function and uses the kit's helpers itself.
+checked that way. A rule that changes parts where they are instead, like `number_widening`,
+gives `eachPart`, the replacements for one part given the facts of the element the chain up
+to that part finds; the kit tries them part after part. Rules only compute with data, so
+they can be tested without a page; the kit does everything in the page.
 
 Add the rule to the list in `js/index.js`. Functions that run in the page must use nothing
 from outside their own body, since Playwright sends them there as source text; `kit.js`

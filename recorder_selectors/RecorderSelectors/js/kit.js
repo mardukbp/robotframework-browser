@@ -16,9 +16,14 @@
 //               a click that hides the page behind a dialog.
 //   fallback    optional: "nth" uses the first candidate with `>> nth=<index>`
 //               when no candidate finds only the element.
-//   rewrite     instead of `candidates`: `async ({ selector, action, page,
-//               context, chain, log }) => selector | undefined`, for a rule that
-//               transforms the selector rather than replacing it.
+//   eachPart    instead of `candidates`: `({ part, el }) => [part, ...]`, the
+//               replacements to try for one part of the chain, `el` holding the
+//               facts of the element the chain up to that part finds; for a rule
+//               that changes parts where they are rather than the whole selector.
+//   skipPart    optional, with `eachPart`: `(part) => boolean`, true leaves the
+//               part alone without looking it up in the page.
+//
+// Rules only compute with data; the kit does everything in the page.
 //
 // A candidate is used only when it finds exactly the recorded element. When the
 // recorded selector no longer finds it, for example after a click navigated,
@@ -505,6 +510,27 @@ async function matchOf(subject, page, frames, parts, includeHidden) {
   return { count, index };
 }
 
+// The chain with each part replaced by the first replacement of `eachPart`
+// that finds only the element the chain finds, part after part.
+async function replaceParts(rule, { page }, chain) {
+  const parts = [...chain.parts];
+  let changed = false;
+  for (let i = 0; i < parts.length; i++) {
+    if (rule.skipPart?.(parts[i])) continue;
+    const el = await factsOf(page, print(parts.slice(0, i + 1)));
+    if (!el) continue;
+    for (const part of rule.eachPart({ part: parts[i], el }).filter(Boolean)) {
+      const candidate = [...parts.slice(0, i), part, ...parts.slice(i + 1)];
+      if (await findsSame(page, print(candidate), print(parts))) {
+        parts[i] = part;
+        changed = true;
+        break;
+      }
+    }
+  }
+  return changed ? print(parts) : undefined;
+}
+
 async function applyRule(rule, ctx) {
   if (rule.actions && !rule.actions.includes(ctx.action?.name))
     return undefined;
@@ -512,7 +538,7 @@ async function applyRule(rule, ctx) {
   if (rule.skip?.(chain)) return undefined;
   const log = (message) =>
     console.log(`recorder_selectors ${rule.name}: ${message}`);
-  if (rule.rewrite) return rule.rewrite({ ...ctx, chain, log });
+  if (rule.eachPart) return replaceParts(rule, ctx, chain);
 
   const subject = await subjectOf(ctx, chain, log);
   if (!subject) return undefined;
@@ -592,6 +618,4 @@ module.exports = {
   role,
   text,
   scope,
-  factsOf,
-  findsSame,
 };

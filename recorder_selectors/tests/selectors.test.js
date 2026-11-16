@@ -9,6 +9,7 @@ const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
 const labelScope = require("../RecorderSelectors/js/rules/label_scope.js");
+const numberWidening = require("../RecorderSelectors/js/rules/number_widening.js");
 const titleDescription = require("../RecorderSelectors/js/rules/title_description.js");
 
 const { parse, parsePart, print, nameOf, attributeOf, withName } = kit;
@@ -145,6 +146,18 @@ describe("rules", () => {
       'role=button[name="Wertehilfe"s]',
       'role=button[name="Wertehilfe"s] >> scope="Art"',
     ]);
+  });
+
+  it("number_widening gives a text back the number Playwright dropped", () => {
+    const part = parsePart('internal:text="km/h bis 60 km/h"i');
+    const el = { texts: ["46 km/h bis 60 km/h", "x".repeat(300)] };
+    // Both spellings of the space after the number: a no-break space stays in a name.
+    assert.deepEqual(numberWidening.eachPart({ part, el }).map((p) => print([p])), [
+      'internal:text="46 km/h bis 60 km/h"i',
+      'internal:text="46 km/h bis 60 km/h"i',
+    ]);
+    assert.deepEqual(numberWidening.eachPart({ part, el: { texts: ["km/h bis 60 km/h"] } }), []);
+    assert.ok(numberWidening.skipPart(parsePart("css=div")));
   });
 
   it("title_description records a clicked element by a title equal to its text", () => {
