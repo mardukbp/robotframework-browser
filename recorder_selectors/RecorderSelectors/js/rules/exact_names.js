@@ -12,32 +12,41 @@
 // own text nodes; when that does not find the element, the exact internal
 // form is used, which Browser writes as an anchored regular expression.
 
-const { parsePart } = require("../kit.js");
+const {
+  nameOf,
+  attributeOf,
+  withName,
+  withAttribute,
+  text,
+} = require("../kit.js");
 
 const flat = (text) => (text || "").replace(/\s+/g, " ").trim();
 const isLoose = (text) => text && !text.exact;
+const descriptionOf = (part) => attributeOf(part, "description");
 
-// The exact forms of a `role=` part with the exact name `name`.
+// The exact forms of a `role` part with the exact name `name`.
 function exactRoles(target, name, el) {
-  const named = parsePart(target.withName(name, true));
-  if (!isLoose(target.description)) return [named.raw];
+  const named = withName(target, name, true);
+  if (!isLoose(descriptionOf(target))) return [named];
   return [
-    named.withAttribute("description", undefined),
-    el.description && named.withAttribute("description", el.description, true),
-    named.raw,
+    withAttribute(named, "description", undefined),
+    el.description &&
+      withAttribute(named, "description", el.description, true),
+    named,
   ].filter(Boolean);
 }
 
 module.exports = {
   name: "exact_names",
-  skip: ({ target }) =>
-    !target.name || (!isLoose(target.name) && !isLoose(target.description)),
+  skip: ({ target }) => {
+    const name = nameOf(target);
+    return !name || (!isLoose(name) && !isLoose(descriptionOf(target)));
+  },
   candidates: ({ el, chain }) => {
-    const { target, rest } = chain;
-    const index = rest.lastIndexOf(target.raw);
+    const { target, rest, targetIndex } = chain;
     const names = [
       ...new Set(
-        [target.name.value, el.name, el.text, ...el.texts]
+        [nameOf(target).value, el.name, el.text, ...el.texts]
           .map(flat)
           .filter(Boolean),
       ),
@@ -46,13 +55,11 @@ module.exports = {
       target.engine === "role"
         ? names.flatMap((name) => exactRoles(target, name, el))
         : [
-            ...(target.engine === "text"
-              ? names.map((name) => `text=${JSON.stringify(name)}`)
-              : []),
-            ...names.map((name) => target.withName(name, true)),
+            ...(target.engine === "text" ? names.map(text) : []),
+            ...names.map((name) => withName(target, name, true)),
           ];
     return exactParts.map((exact) =>
-      rest.map((part, i) => (i === index ? exact : part)),
+      rest.map((part, i) => (i === targetIndex ? exact : part)),
     );
   },
 };

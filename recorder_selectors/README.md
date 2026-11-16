@@ -75,16 +75,19 @@ RecorderSelectors/
 
 ## Writing a rule
 
-A rule is a plain object; `js/kit.js` documents every field. Most rules only say which
-selectors to try, given the facts about the recorded element:
+A rule is a plain object; `js/kit.js` documents every field. A rule never writes selector
+syntax: the kit parses a selector into parts, plain objects such as
+`{engine: "role", role: "link", attrs: [{key: "name", value: "Details", flag: "i", ...}]}`,
+and prints the parts a rule returns. Most rules only say which parts to try, given the facts
+about the recorded element:
 
 ```js
-const { role, scope } = require("../kit.js");
+const { role, scope, nameOf } = require("../kit.js");
 
 module.exports = {
   name: "label_scope",
   skip: ({ target, nth }) =>
-    !nth && (target.engine === "label" || (target.engine === "role" && target.name)),
+    !nth && (target.engine === "label" || (target.engine === "role" && nameOf(target))),
   candidates: ({ el }) =>
     el.isControl && !el.hasName && el.scopeText
       ? [[role(el.role), scope(el.scopeText)]]
@@ -114,6 +117,13 @@ puts the helpers of `elementFacts` inside its body for that reason.
   in all of them.
 
 ## Tests
+
+The unit tests of the selector data and of the rules are in `tests/`, for `node --test`;
+`utest/test_recorder_selectors_js.py` runs them with the Python unit tests:
+
+```
+node --test "recorder_selectors/tests/*.test.js"
+```
 
 The acceptance tests are in `atest/test/09_Plugins/recorder_selectors/`:
 

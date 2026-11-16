@@ -7,9 +7,9 @@
 // A link may navigate away before the selector is checked; the kit then checks
 // it against the snapshot taken when the link was pressed.
 
-const { isIdPart, scope } = require("../kit.js");
+const { scope } = require("../kit.js");
 
-const lastIdPart = ({ rest }) => rest.findLastIndex(isIdPart);
+const lastIdPart = ({ rest }) => rest.findLastIndex(({ engine }) => engine === "id");
 
 module.exports = {
   name: "caption_scope",

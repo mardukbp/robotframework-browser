@@ -9,12 +9,12 @@
 // The click may open a dialog that hides the form with aria-hidden, so the
 // candidates are checked with include-hidden.
 
-const { role, scope } = require("../kit.js");
+const { role, scope, nameOf } = require("../kit.js");
 
 module.exports = {
   name: "aria_label",
   skip: ({ target, nth }) =>
-    !nth && target.engine === "role" && Boolean(target.name),
+    !nth && target.engine === "role" && Boolean(nameOf(target)),
   includeHidden: true,
   fallback: "nth",
   candidates: ({ el }) => {
