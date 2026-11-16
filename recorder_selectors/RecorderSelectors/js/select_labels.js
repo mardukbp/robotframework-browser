@@ -38,18 +38,8 @@ function noteChosenLabels(noted) {
   );
 }
 
-const SCRIPT = `(${noteChosenLabels})(${JSON.stringify(NOTED)});`;
-
-const prepared = new WeakSet();
-
-async function install(context) {
-  if (prepared.has(context)) return;
-  prepared.add(context);
-  await context.addInitScript(SCRIPT);
-  for (const page of context.pages())
-    for (const frame of page.frames())
-      await frame.evaluate(SCRIPT).catch(() => undefined);
-}
+// The page script that notes the chosen labels; see `install` in kit.js.
+const CHOICES = { script: `(${noteChosenLabels})(${JSON.stringify(NOTED)});` };
 
 // In the page: the label of each value, or null when it has none to record.
 function labelsOf(select, [values, noted]) {
@@ -86,4 +76,7 @@ async function byLabel({ action, page }) {
   return { ...action, by: "label", options: labels };
 }
 
-module.exports = { install, step: { name: "select_labels", run: byLabel } };
+module.exports = {
+  pageScript: CHOICES,
+  step: { name: "select_labels", run: byLabel },
+};

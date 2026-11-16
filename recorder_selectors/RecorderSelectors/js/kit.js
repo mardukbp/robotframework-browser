@@ -392,33 +392,54 @@ function reportPresses(binding, clickable, facts) {
   );
 }
 
-const PRESS_SCRIPT = `(${reportPresses})(${JSON.stringify(BINDING)}, ${JSON.stringify(CLICKABLE)}, ${FACTS});`;
-
 // ------------------------------------------------------------- in Node
 
-const prepared = new WeakSet();
 const presses = new WeakMap();
 
-// Before the first recording in a context: take a snapshot at every press, in
-// pages opened later and in the pages already open.
-async function installPresses(context) {
-  if (prepared.has(context)) return;
-  prepared.add(context);
-  try {
-    await context.exposeBinding(BINDING, ({ page }, facts) => {
+// The page script that takes a snapshot of the element at every press.
+const PRESSES = {
+  script: `(${reportPresses})(${JSON.stringify(BINDING)}, ${JSON.stringify(CLICKABLE)}, ${FACTS});`,
+  binding: {
+    name: BINDING,
+    receive: (page, facts) => {
       if (facts && typeof facts === "object")
         presses.set(page, { facts, at: Date.now() });
-    });
-  } catch (error) {
-    if (!String(error).includes("has been already registered")) {
-      prepared.delete(context);
+    },
+  },
+};
+
+// A page script is data: `{ script, binding? }`, `script` the source that runs
+// in every frame, `binding` an optional `{ name, receive(page, data) }` it calls.
+const installed = new WeakMap();
+
+// Runs each page script once per context: in the frames already open, and as
+// an init script, before the page's own scripts, in every frame opened later.
+async function install(context, pageScripts) {
+  const done = installed.get(context) ?? new Set();
+  installed.set(context, done);
+  for (const pageScript of pageScripts) {
+    if (done.has(pageScript)) continue;
+    done.add(pageScript);
+    try {
+      if (pageScript.binding) await expose(context, pageScript.binding);
+      await context.addInitScript(pageScript.script);
+    } catch (error) {
+      done.delete(pageScript);
       throw error;
     }
+    for (const page of context.pages())
+      for (const frame of page.frames())
+        await frame.evaluate(pageScript.script).catch(() => undefined);
   }
-  await context.addInitScript(PRESS_SCRIPT);
-  for (const page of context.pages())
-    for (const frame of page.frames())
-      await frame.evaluate(PRESS_SCRIPT).catch(() => undefined);
+}
+
+async function expose(context, { name, receive }) {
+  try {
+    await context.exposeBinding(name, ({ page }, data) => receive(page, data));
+  } catch (error) {
+    // Bindings stay with the context, which a new recording session reuses.
+    if (!String(error).includes("has been already registered")) throw error;
+  }
 }
 
 function recentPress(page) {
@@ -614,7 +635,8 @@ function pipeline(steps) {
 module.exports = {
   pipeline,
   selectorStep,
-  installPresses,
+  install,
+  PRESSES,
   parse,
   parsePart,
   print,
