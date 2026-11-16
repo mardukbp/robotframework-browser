@@ -1,6 +1,6 @@
-// What every rule of the plugin shares: reading and building selectors, the
-// facts about the recorded element, the snapshot taken when it is pressed, and
-// the runner that checks a rule's candidate selectors in the page.
+// What every rule of the plugin shares: selectors as data, the facts about the
+// recorded element, the snapshot taken when it is pressed, and the runner that
+// checks a rule's candidates in the page.
 //
 // A rule is an object:
 //
@@ -9,10 +9,10 @@
 //               a pick arrives as the Action `pick`.
 //   skip        optional: `(chain) => boolean`, true leaves the selector alone.
 //   candidates  `({ el, chain }) => [parts, ...]`: the selectors to try, in
-//               order, each a list of chain parts without the frames. `el` holds
-//               the facts of `factsOf` about the recorded element. Falsy entries
-//               are ignored.
-//   includeHidden  optional: check `role=` parts with `include-hidden=true`, for
+//               order, each a list of parts (see Selectors) without the frames.
+//               `el` holds the facts of `factsOf` about the recorded element.
+//               Falsy entries are ignored.
+//   includeHidden  optional: check `role` parts with `include-hidden=true`, for
 //               a click that hides the page behind a dialog.
 //   fallback    optional: "nth" uses the first candidate with `>> nth=<index>`
 //               when no candidate finds only the element.
@@ -24,7 +24,7 @@
 // recorded selector no longer finds it, for example after a click navigated,
 // the candidates are checked against the snapshot taken at the press instead.
 
-const { scopeOf, scope, scopeTextOf } = require("./scope.js");
+const { scopeOf, scopeTextOf, scopeSelector } = require("./scope.js");
 
 const TIMEOUT_MS = 500;
 const PRESS_MAX_AGE_MS = 10000;
@@ -35,6 +35,18 @@ const CLICKABLE =
   "[role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option]";
 
 // ---------------------------------------------------------------- selectors
+//
+// A selector is data. `parse` splits it into parts, plain objects with an
+// `engine`, and `print` writes parts back as a selector; rules read and build
+// parts and never selector syntax. The parts:
+//
+//   role         { engine, prefix: "internal:role=" | "role=", role,
+//                  attrs: [{ key, value, flag, quoted }] }
+//   text, label  { engine, prefix: "internal:text=" | "text=" | ..., value, flag }
+//   scope        { engine, text }
+//   id, nth, other  { engine, raw }: printed as they were
+//
+// A `flag` is `s` for an exact match, `i` for a case-insensitive part, or "".
 
 // Splits on Playwright's ` >> ` chain separator, never inside a quoted string.
 function splitChain(selector) {
@@ -55,115 +67,86 @@ function splitChain(selector) {
   return parts;
 }
 
-const join = (parts) => parts.join(" >> ");
 const flat = (text) => (text || "").replace(/\s+/g, " ").trim();
 
-// Quoting of attribute values in `role=` parts, as Playwright does it.
+// Quoting of attribute values in `role` parts, as Playwright does it.
 const encodeAttribute = (value) =>
   `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-const decodeAttribute = (raw) =>
-  raw.startsWith('"') ? raw.slice(1, -1).replace(/\\(.)/g, "$1") : raw;
+const decodeAttribute = (raw) => raw.slice(1, -1).replace(/\\(.)/g, "$1");
 
 const ROLE = /^((?:internal:)?role=)([a-z]+)/;
 const ATTRIBUTE =
   /\[([a-z-]+)(?:=(?:("(?:[^"\\]|\\.)*")([is]?)|([^\]"]*)))?\]/y;
 const TEXT = /^(internal:(text|label)=)("(?:[^"\\]|\\.)*")([is]?)$/;
 const NTH = /^nth=-?\d+$/;
+const ID = /^(css=)?\s*(#|\[id[=~|^$*]?=)|^internal:attr=\[id=|^id=/;
 
-function parseRole(part) {
-  const head = ROLE.exec(part);
+function parseRole(raw) {
+  const head = ROLE.exec(raw);
   if (!head) return undefined;
-  const attributes = [];
+  const attrs = [];
   ATTRIBUTE.lastIndex = head[0].length;
-  while (ATTRIBUTE.lastIndex < part.length) {
-    const start = ATTRIBUTE.lastIndex;
-    const match = ATTRIBUTE.exec(part);
+  while (ATTRIBUTE.lastIndex < raw.length) {
+    const match = ATTRIBUTE.exec(raw);
     if (!match) return undefined;
     const [, key, quoted, flag, plain] = match;
-    attributes.push({
-      key,
-      raw: part.slice(start, ATTRIBUTE.lastIndex),
-      value: quoted !== undefined ? decodeAttribute(quoted) : plain,
-      flag,
-    });
-  }
-  const textOf = (key) => {
-    const found = attributes.find(
-      (a) => a.key === key && a.value !== undefined,
-    );
-    return found && { value: found.value, exact: found.flag === "s" };
-  };
-  return {
-    engine: "role",
-    raw: part,
-    role: head[2],
-    name: textOf("name"),
-    description: textOf("description"),
-    withName: (value, exact) => withAttribute("name", value, exact),
-    // The part with the attribute `key` set to `value`, exact or not, or as
-    // exact as before; an undefined `value` removes it.
-    withAttribute,
-  };
-
-  function withAttribute(key, value, exact) {
-    return (
-      head[0] +
-      attributes
-        .map((a) => {
-          if (a.key !== key) return a.raw;
-          if (value === undefined) return "";
-          return `[${key}=${encodeAttribute(value)}${flagOf(exact, a.flag)}]`;
-        })
-        .join("")
+    attrs.push(
+      quoted !== undefined
+        ? { key, value: decodeAttribute(quoted), flag, quoted: true }
+        : { key, value: plain, flag: "", quoted: false },
     );
   }
+  return { engine: "role", prefix: head[1], role: head[2], attrs };
 }
 
-// The flag of a name: `s` when `exact`, `i` when not, `flag` when undefined.
-function flagOf(exact, flag) {
-  if (exact === undefined) return flag || "";
-  return exact ? "s" : "i";
-}
-
-// One part of a chain: `{ engine, raw, name?, description?, withName? }`. `name`
-// is `{ value, exact }` for a `role=` part with a name and for the text of an
-// `internal:text=` or `internal:label=` part; `withName(value, exact)` gives the
-// part with another name, exact or not, or as exact as before.
-function parsePart(part) {
-  const role = parseRole(part);
+function parsePart(raw) {
+  const role = parseRole(raw);
   if (role) return role;
-  const text = TEXT.exec(part);
+  const text = TEXT.exec(raw);
   if (text) {
-    const [, head, engine, quoted, flag] = text;
-    return {
-      engine,
-      raw: part,
-      name: { value: JSON.parse(quoted), exact: flag === "s" },
-      withName: (value, exact) =>
-        `${head}${JSON.stringify(value)}${flagOf(exact, flag)}`,
-    };
+    const [, prefix, engine, quoted, flag] = text;
+    return { engine, prefix, value: JSON.parse(quoted), flag };
   }
-  const scopeText = scopeTextOf(part);
-  if (scopeText !== undefined)
-    return { engine: "scope", raw: part, text: scopeText };
-  if (isIdPart(part)) return { engine: "id", raw: part };
-  if (NTH.test(part)) return { engine: "nth", raw: part };
-  return { engine: "other", raw: part };
+  const scopeText = scopeTextOf(raw);
+  if (scopeText !== undefined) return { engine: "scope", text: scopeText };
+  if (ID.test(raw)) return { engine: "id", raw };
+  if (NTH.test(raw)) return { engine: "nth", raw };
+  return { engine: "other", raw };
 }
 
-// A part that finds an element by its id.
-function isIdPart(part) {
-  return /^(css=)?\s*(#|\[id[=~|^$*]?=)|^internal:attr=\[id=|^id=/.test(part);
+const printAttribute = ({ key, value, flag, quoted }) => {
+  if (value === undefined) return `[${key}]`;
+  return quoted ? `[${key}=${encodeAttribute(value)}${flag}]` : `[${key}=${value}]`;
+};
+
+function printPart(part) {
+  switch (part.engine) {
+    case "role":
+      return part.prefix + part.role + part.attrs.map(printAttribute).join("");
+    case "text":
+    case "label":
+      return `${part.prefix}${JSON.stringify(part.value)}${part.flag}`;
+    case "scope":
+      return scopeSelector(part.text);
+    default:
+      return part.raw;
+  }
 }
+
+const print = (parts) => parts.map(printPart).join(" >> ");
 
 // The chain of `selector`: `frames` up to the last frame it enters, `rest`
-// after them, `target` the last part of `rest` before the `scope=` and `nth=`
-// filters that end it, parsed, and `nth` the `nth=` among those filters.
+// after them, `target` the last part of `rest` before the `scope` and `nth`
+// filters that end it, at `targetIndex` in `rest`, and `nth` the `nth` part
+// among those filters.
 function parse(selector) {
-  const parts = splitChain(selector);
-  const frames = parts.slice(0, parts.lastIndexOf(ENTER_FRAME) + 1);
+  const parts = splitChain(selector).map(parsePart);
+  const frames = parts.slice(
+    0,
+    parts.findLastIndex((part) => part.raw === ENTER_FRAME) + 1,
+  );
   const rest = parts.slice(frames.length);
-  const isFilter = (part) => NTH.test(part) || scopeTextOf(part) !== undefined;
+  const isFilter = ({ engine }) => engine === "nth" || engine === "scope";
   let end = rest.length;
   while (end > 1 && isFilter(rest[end - 1])) end--;
   return {
@@ -171,22 +154,77 @@ function parse(selector) {
     parts,
     frames,
     rest,
-    nth: rest.slice(end).find((part) => NTH.test(part)),
-    target: parsePart(rest[end - 1] ?? ""),
+    nth: rest.slice(end).find(({ engine }) => engine === "nth"),
+    target: rest[end - 1] ?? parsePart(""),
+    targetIndex: end - 1,
   };
 }
 
-// `role=<role>[name="..."s][description="..."s]`, in Browser's syntax.
-function role(roleName, { name, description, exact = true } = {}) {
-  const flag = exact ? "s" : "i";
-  const attribute = (key, value) =>
-    value === undefined ? "" : `[${key}=${encodeAttribute(value)}${flag}]`;
-  return `role=${roleName}${attribute("name", name)}${attribute("description", description)}`;
+const flagFor = (exact, flag) =>
+  exact === undefined ? flag || "" : exact ? "s" : "i";
+
+// `{ value, exact }` of the attribute `key` of a `role` part with a value.
+function attributeOf(part, key) {
+  const found = part.attrs?.find((a) => a.key === key && a.value !== undefined);
+  return found && { value: found.value, exact: found.flag === "s" };
 }
 
+// `{ value, exact }`: the name of a `role` part, the text of a `text` or
+// `label` part, or undefined.
+function nameOf(part) {
+  if (part.engine === "role") return attributeOf(part, "name");
+  if (part.engine === "text" || part.engine === "label")
+    return { value: part.value, exact: part.flag === "s" };
+  return undefined;
+}
+
+// The `role` part with its attribute `key` set to `value`, exact or not, or as
+// exact as before; an undefined `value` removes it. Other attributes stay.
+function withAttribute(part, key, value, exact) {
+  return {
+    ...part,
+    attrs: part.attrs.flatMap((a) => {
+      if (a.key !== key) return [a];
+      if (value === undefined) return [];
+      return [{ key, value, flag: flagFor(exact, a.flag), quoted: true }];
+    }),
+  };
+}
+
+// The part with another name, exact or not, or as exact as before.
+function withName(part, value, exact) {
+  return part.engine === "role"
+    ? withAttribute(part, "name", value, exact)
+    : { ...part, value, flag: flagFor(exact, part.flag) };
+}
+
+// A `role` part in Browser's syntax, by default with exact attributes.
+function role(roleName, { name, description, exact = true } = {}) {
+  const flag = exact ? "s" : "i";
+  const attrs = [
+    ["name", name],
+    ["description", description],
+  ]
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => ({ key, value, flag, quoted: true }));
+  return { engine: "role", prefix: "role=", role: roleName, attrs };
+}
+
+// A `text` part in Browser's syntax, which compares the element's own text.
+const text = (value) => ({ engine: "text", prefix: "text=", value, flag: "" });
+
+// The `scope` filter keeping the elements whose scope is `text`.
+const scope = (text) => ({ engine: "scope", text });
+
 const withHidden = (part) =>
-  ROLE.test(part) && !part.includes("[include-hidden=")
-    ? part.replace(ROLE, "$&[include-hidden=true]")
+  part.engine === "role" && !part.attrs.some((a) => a.key === "include-hidden")
+    ? {
+        ...part,
+        attrs: [
+          { key: "include-hidden", value: "true", flag: "", quoted: false },
+          ...part.attrs,
+        ],
+      }
     : part;
 
 // ------------------------------------------------------------- in the page
@@ -396,14 +434,14 @@ function textMatches(actual, wanted) {
 // finds, and the index of the pressed element among them; null for any other
 // candidate, which cannot be checked without the page.
 function matchPeers(peers, parts) {
-  const [rolePart, scopePart, ...more] = parts.map(parsePart);
+  const [rolePart, scopePart, ...more] = parts;
   if (rolePart?.engine !== "role" || more.length) return null;
   if (scopePart && scopePart.engine !== "scope") return null;
   const found = peers.filter(
     (peer) =>
       peer.role === rolePart.role &&
-      textMatches(peer.name, rolePart.name) &&
-      textMatches(peer.description, rolePart.description) &&
+      textMatches(peer.name, nameOf(rolePart)) &&
+      textMatches(peer.description, attributeOf(rolePart, "description")) &&
       (!scopePart || peer.scopeText === scopePart.text),
   );
   return {
@@ -441,11 +479,12 @@ async function subjectOf({ page, selector }, chain, log) {
   }
   const press = recentPress(page);
   const { target } = chain;
+  const name = nameOf(target);
   const pressed =
     target.engine === "role" &&
-    target.name &&
+    name &&
     target.role === press?.role &&
-    textMatches(press.name, target.name);
+    textMatches(press.name, name);
   if (pressed && press.peers) return { el: press, peers: press.peers };
   log(`${selector} finds ${count} elements, kept`);
   return undefined;
@@ -453,7 +492,7 @@ async function subjectOf({ page, selector }, chain, log) {
 
 async function matchOf(subject, page, frames, parts, includeHidden) {
   if (!subject.handle) return matchPeers(subject.peers, parts);
-  const checked = join([
+  const checked = print([
     ...frames,
     ...(includeHidden ? parts.map(withHidden) : parts),
   ]);
@@ -483,7 +522,7 @@ async function applyRule(rule, ctx) {
     ).filter(Boolean);
     let first;
     for (const parts of candidates) {
-      const selector = join([...chain.frames, ...parts]);
+      const selector = print([...chain.frames, ...parts]);
       const match = await matchOf(
         subject,
         ctx.page,
@@ -545,9 +584,13 @@ module.exports = {
   pipeline,
   parse,
   parsePart,
-  isIdPart,
-  join,
+  print,
+  nameOf,
+  attributeOf,
+  withName,
+  withAttribute,
   role,
+  text,
   scope,
   factsOf,
   findsSame,

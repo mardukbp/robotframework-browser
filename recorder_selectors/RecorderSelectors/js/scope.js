@@ -107,8 +107,8 @@ async function register(playwright) {
 module.exports = {
   scopeOf,
   register,
-  // The `scope=` part that keeps the elements whose scope is `text`.
-  scope: (text) => `${ENGINE_NAME}=${JSON.stringify(text)}`,
+  // The `scope=` selector part that keeps the elements whose scope is `text`.
+  scopeSelector: (text) => `${ENGINE_NAME}=${JSON.stringify(text)}`,
   // The text of a `scope=` part, or undefined for any other part.
   scopeTextOf: (part) =>
     part.startsWith(`${ENGINE_NAME}=`)

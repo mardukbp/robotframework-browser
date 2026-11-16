@@ -3,7 +3,7 @@
 // "46 km/h bis 60 km/h" is recorded as `internal:text="km/h bis 60 km/h"i`. The
 // whole text is used when it still finds the same element and only it.
 
-const { parsePart, join, factsOf, findsSame } = require("../kit.js");
+const { nameOf, withName, print, factsOf, findsSame } = require("../kit.js");
 
 // Playwright keeps at most 80 characters of a text; a longer source was cut, not stripped.
 const MAX_SOURCE_LENGTH = 200;
@@ -39,23 +39,23 @@ function withNumber(name, source) {
 
 module.exports = {
   name: "number_widening",
-  skip: ({ parts }) => !parts.some((part) => parsePart(part).name),
+  skip: ({ parts }) => !parts.some(nameOf),
   rewrite: async ({ page, chain }) => {
     const parts = [...chain.parts];
     let result = chain.selector;
     for (let i = 0; i < parts.length; i++) {
-      const part = parsePart(parts[i]);
-      if (!part.name) continue;
-      const facts = await factsOf(page, join(parts.slice(0, i + 1)));
+      const name = nameOf(parts[i]);
+      if (!name) continue;
+      const facts = await factsOf(page, print(parts.slice(0, i + 1)));
       const sources = (facts?.texts ?? []).filter(
         (text) => text.length <= MAX_SOURCE_LENGTH,
       );
       const names = new Set(
-        sources.flatMap((source) => withNumber(part.name.value, source)),
+        sources.flatMap((source) => withNumber(name.value, source)),
       );
-      for (const name of names) {
-        const widened = part.withName(name);
-        const candidate = join([
+      for (const wider of names) {
+        const widened = withName(parts[i], wider);
+        const candidate = print([
           ...parts.slice(0, i),
           widened,
           ...parts.slice(i + 1),
