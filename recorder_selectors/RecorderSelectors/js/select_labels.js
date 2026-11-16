@@ -41,39 +41,45 @@ function noteChosenLabels(noted) {
 // The page script that notes the chosen labels; see `install` in kit.js.
 const CHOICES = { script: `(${noteChosenLabels})(${JSON.stringify(NOTED)});` };
 
-// In the page: the label of each value, or null when it has none to record.
+// In the page: the label of each value, or null when it has none to record:
+// its option alone has the value and the label, and had that label when chosen.
 function labelsOf(select, [values, noted]) {
-  const chosen = select[noted];
-  if (!(chosen instanceof Map)) return values.map(() => null);
   const options = Array.from(select.options);
-  return values.map((value) => {
-    const matches = options.filter((option) => option.value === value);
-    if (matches.length !== 1) return null;
-    const { label } = matches[0];
-    if (!label || chosen.get(value) !== label) return null;
-    return options.filter((option) => option.label === label).length === 1
+  const count = (key, value) => options.filter((o) => o[key] === value).length;
+  const chosen = select[noted] instanceof Map ? select[noted] : new Map();
+  const labelOf = (value) => {
+    const label = options.find((o) => o.value === value)?.label;
+    return label &&
+      count("value", value) === 1 &&
+      count("label", label) === 1 &&
+      chosen.get(value) === label
       ? label
       : null;
-  });
+  };
+  return values.map(labelOf);
 }
+
+// A choice Playwright reports by value, in a page to look the labels up in.
+const isChoice = ({ name, by, selector, options }, page) =>
+  name === "select" &&
+  by === undefined &&
+  typeof selector === "string" &&
+  Array.isArray(options) &&
+  options.length > 0 &&
+  typeof page?.locator === "function";
 
 // The select Action by label, or undefined to keep it.
 async function byLabel({ action, page }) {
-  const { selector, options } = action;
-  if (action.name !== "select" || action.by !== undefined) return undefined;
-  if (typeof selector !== "string" || typeof page?.locator !== "function")
-    return undefined;
-  if (!Array.isArray(options) || options.length === 0) return undefined;
+  if (!isChoice(action, page)) return undefined;
   const labels = await page
-    .locator(selector)
-    .evaluate(labelsOf, [options, NOTED], { timeout: TIMEOUT_MS });
-  if (!labels.every((label) => typeof label === "string")) {
-    console.log(
-      `recorder_selectors select_labels: ${selector} kept by value: an option has no label of its own`,
-    );
-    return undefined;
-  }
-  return { ...action, by: "label", options: labels };
+    .locator(action.selector)
+    .evaluate(labelsOf, [action.options, NOTED], { timeout: TIMEOUT_MS });
+  if (labels.every((label) => typeof label === "string"))
+    return { ...action, by: "label", options: labels };
+  console.log(
+    `recorder_selectors select_labels: ${action.selector} kept by value: an option has no label of its own`,
+  );
+  return undefined;
 }
 
 module.exports = {

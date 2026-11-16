@@ -46,31 +46,42 @@ function scopeOf(element) {
 
   const precedes = (a, b) =>
     Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const document = element.ownerDocument;
 
-  for (
-    let ancestor = element.parentElement;
-    ancestor && ancestor !== element.ownerDocument.documentElement;
-    ancestor = ancestor.parentElement
-  ) {
+  // The ancestors of `e` below the document element, the closest first.
+  const ancestorsOf = (e) => {
+    const parent = e.parentElement;
+    return parent && parent !== document.documentElement
+      ? [parent, ...ancestorsOf(parent)]
+      : [];
+  };
+  // The text nodes of `root` before the element, in document order.
+  function* textsBefore(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node; (node = walker.nextNode()) && precedes(node, element); )
+      yield node;
+  }
+  // In `ancestor`: the scope text, null when there is none further up, or
+  // undefined to look further up.
+  const scopeIn = (ancestor) => {
     const lookalike = [...ancestor.getElementsByTagName(element.localName)]
       .filter((e) => isLookalike(e) && precedes(e, element))
       .at(-1);
-    const walker = element.ownerDocument.createTreeWalker(
-      ancestor,
-      NodeFilter.SHOW_TEXT,
-    );
-    let scope = null;
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (!precedes(node, element)) break;
-      if (lookalike && !precedes(lookalike, node)) continue;
-      if (flat(node.textContent) && isText(node.parentElement))
-        scope = node.parentElement;
-    }
+    const scope = [...textsBefore(ancestor)]
+      .filter((node) => !lookalike || precedes(lookalike, node))
+      .filter((node) => flat(node.textContent) && isText(node.parentElement))
+      .at(-1)?.parentElement;
     if (scope) return flat(scope.textContent);
     // Any text further up comes before the lookalike too.
-    if (lookalike) return null;
-  }
-  return null;
+    return lookalike ? null : undefined;
+  };
+
+  return (
+    ancestorsOf(element).reduce(
+      (found, ancestor) => (found === undefined ? scopeIn(ancestor) : found),
+      undefined,
+    ) ?? null
+  );
 }
 
 // Runs in the page: the text a `scope=` selector asks for, quoted or not.

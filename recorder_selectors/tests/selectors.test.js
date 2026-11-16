@@ -4,7 +4,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const kit = require("../RecorderSelectors/js/kit.js");
+const kit = require("../RecorderSelectors/js/selector.js");
 const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
