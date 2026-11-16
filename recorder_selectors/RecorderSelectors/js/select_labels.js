@@ -15,7 +15,8 @@
 const CHOSEN_LABELS = "__rfbRecorderSelectorsChosenLabels";
 const TIMEOUT_MS = 500;
 
-// The select Action by label, or undefined to keep it.
+// The select Action with its options as Playwright's option descriptors by
+// label, `{ label }`, or undefined to keep it.
 async function recordByLabel({ action, page }) {
   if (!isChoiceByValue(action, page)) return undefined;
   const labels = await page
@@ -24,20 +25,23 @@ async function recordByLabel({ action, page }) {
       timeout: TIMEOUT_MS,
     });
   const allHaveLabels = labels.every((label) => typeof label === "string");
-  if (allHaveLabels) return { ...action, by: "label", options: labels };
+  if (allHaveLabels) {
+    const options = labels.map((label) => ({ label }));
+    return { ...action, options };
+  }
   console.log(
     `recorder_selectors select_labels: ${action.selector} kept by value: an option has no label of its own`,
   );
   return undefined;
 }
 
-// Whether `action` is a choice Playwright reports by value, in a page to look
-// the labels up in.
+// Whether `action` is a choice by value, as Playwright records it, in a page to
+// look the labels up in.
 function isChoiceByValue(action, page) {
   if (action.name !== "select") return false;
-  if (action.by !== undefined) return false;
   if (typeof action.selector !== "string") return false;
   if (!Array.isArray(action.options) || action.options.length === 0) return false;
+  if (!action.options.every((option) => typeof option === "string")) return false;
   return typeof page?.locator === "function";
 }
 

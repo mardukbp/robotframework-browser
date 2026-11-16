@@ -24,15 +24,13 @@ ${MAKES}
 *** Test Cases ***
 A Choice Is Recorded By The Label Of The Option
     ${action} =    Recorded Select    id=make    internal:label="Make AMELUNG AUDI"i    14: 6792
-    Should Be Equal    ${action}[by]    label
-    Should Be Equal    ${action}[options]    ${{['AMELUNG']}}
+    Should Be Equal    ${action}[options]    ${{[{'label': 'AMELUNG'}]}}
     Select Options By    id=make    value    0: null
     Select Options By    ${action}[selector]    label    AMELUNG
     Get Selected Options    id=make    value    ==    14: 6792
 
 A Label Two Options Share Keeps The Value
     ${action} =    Recorded Select    id=make    internal:label="Make AMELUNG AUDI"i    84: 0710
-    Should Not Contain    ${action}    by
     Should Be Equal    ${action}[options]    ${{['84: 0710']}}
 
 A Label The Page Changes On The Choice Keeps The Value
@@ -40,7 +38,6 @@ A Label The Page Changes On The Choice Keeps The Value
     ...    id=make
     ...    (select) => select.addEventListener('change', () => { select.selectedOptions[0].textContent += ' (chosen)'; })
     ${action} =    Recorded Select    id=make    internal:label="Make AMELUNG AUDI"i    14: 6792
-    Should Not Contain    ${action}    by
     Should Be Equal    ${action}[options]    ${{['14: 6792']}}
 
 A Choice In An Iframe Is Recorded By The Label Of The Option
@@ -52,8 +49,7 @@ A Choice In An Iframe Is Recorded By The Label Of The Option
     ...    id=dealer >>> id=make
     ...    \#dealer >> internal:control=enter-frame >> internal:label="Make AMELUNG AUDI"i
     ...    14: 6792
-    Should Be Equal    ${action}[by]    label
-    Should Be Equal    ${action}[options]    ${{['AMELUNG']}}
+    Should Be Equal    ${action}[options]    ${{[{'label': 'AMELUNG'}]}}
     Select Options By    id=dealer >>> id=make    value    0: null
     Select Options By    ${action}[selector]    label    AMELUNG
     Get Selected Options    id=dealer >>> id=make    value    ==    14: 6792

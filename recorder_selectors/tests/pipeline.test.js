@@ -17,9 +17,9 @@ describe("pipeline", () => {
         seen.push(action.selector);
         return undefined;
       }),
-      step("third", async ({ action }) => ({ ...action, by: "label" })),
+      step("third", async ({ action }) => ({ ...action, options: [{ label: "A" }] })),
     ]);
-    assert.deepEqual(await hook({ action: click }), { ...click, selector: "#b", by: "label" });
+    assert.deepEqual(await hook({ action: click }), { ...click, selector: "#b", options: [{ label: "A" }] });
     assert.deepEqual(seen, ["#b"]);
   });
 
