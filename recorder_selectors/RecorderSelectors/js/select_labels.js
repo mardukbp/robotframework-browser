@@ -74,22 +74,16 @@ async function byLabel({ action, page }) {
   if (typeof selector !== "string" || typeof page?.locator !== "function")
     return undefined;
   if (!Array.isArray(options) || options.length === 0) return undefined;
-  const log = (message) =>
-    console.log(`recorder_selectors select_labels: ${message}`);
-  let labels;
-  try {
-    labels = await page
-      .locator(selector)
-      .evaluate(labelsOf, [options, NOTED], { timeout: TIMEOUT_MS });
-  } catch (error) {
-    log(`${selector} kept by value: ${error}`);
-    return undefined;
-  }
+  const labels = await page
+    .locator(selector)
+    .evaluate(labelsOf, [options, NOTED], { timeout: TIMEOUT_MS });
   if (!labels.every((label) => typeof label === "string")) {
-    log(`${selector} kept by value: an option has no label of its own`);
+    console.log(
+      `recorder_selectors select_labels: ${selector} kept by value: an option has no label of its own`,
+    );
     return undefined;
   }
   return { ...action, by: "label", options: labels };
 }
 
-module.exports = { install, byLabel };
+module.exports = { install, step: { name: "select_labels", run: byLabel } };
