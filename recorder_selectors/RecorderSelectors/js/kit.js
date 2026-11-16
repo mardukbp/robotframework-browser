@@ -573,41 +573,48 @@ async function applyRule(rule, ctx) {
   }
 }
 
-// The hooks of the JS extension: the rules run in order, each on the selector
-// the previous one returned. A rule that fails keeps the selector it got. Only
-// the selector of the Action changes; an Action without one is left alone.
-function pipeline(rules) {
+// ------------------------------------------------------------- the hook
+//
+// A step is `{ name, run }`: `run({ action, page, context })` gives the Action
+// to record, or undefined to keep it, as Browser's `__recordedAction` does.
+
+// A rule as a step: it changes the selector of an Action that has one.
+function selectorStep(rule) {
   return {
-    __recordingStarted: ({ context }) => installPresses(context),
-    __recordedAction: async ({ action, page, context }) => {
+    name: rule.name,
+    run: async ({ action, page, context }) => {
       const { selector } = action;
       if (typeof selector !== "string" || typeof page?.locator !== "function")
         return undefined;
-      let current = selector;
-      for (const rule of rules) {
-        try {
-          const result = await applyRule(rule, {
-            selector: current,
-            action: { ...action, selector: current },
-            page,
-            context,
-          });
-          if (typeof result === "string" && result.trim()) current = result;
-        } catch (error) {
-          console.log(
-            `recorder_selectors ${rule.name}: ${current} kept: ${error}`,
-          );
-        }
-      }
-      return current === selector
-        ? undefined
-        : { ...action, selector: current };
+      const result = await applyRule(rule, { selector, action, page, context });
+      return typeof result === "string" && result.trim()
+        ? { ...action, selector: result }
+        : undefined;
     },
+  };
+}
+
+// The `__recordedAction` hook of the steps: each runs on the Action the one
+// before gave. A step that fails keeps the Action it got.
+function pipeline(steps) {
+  return async ({ action, page, context }) => {
+    let current = action;
+    for (const step of steps) {
+      try {
+        current = (await step.run({ action: current, page, context })) ?? current;
+      } catch (error) {
+        const what = current.selector ?? current.name;
+        console.log(`recorder_selectors ${step.name}: ${what} kept: ${error}`);
+      }
+    }
+    return current === action ? undefined : current;
   };
 }
 
 module.exports = {
   pipeline,
+  selectorStep,
+  installPresses,
   parse,
   parsePart,
   print,
