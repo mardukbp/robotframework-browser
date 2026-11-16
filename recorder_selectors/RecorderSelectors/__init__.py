@@ -39,6 +39,14 @@ class RecorderSelectors(LibraryComponent):
     element; otherwise Playwright's is kept and the reason is logged in
     ``playwright-log.txt``.
 
+    A choice in a select is recorded by the labels of the chosen options
+    instead of their values, which are often generated:
+    ``Select Options By    id=make    label    AMELUNG`` instead of
+    ``value    14: 6792``. The labels are noted in the page as the choice
+    happens, before the page's own scripts can relabel the options. The values
+    stay when an option has no label, shares it with another option, or its
+    label changed by the time Playwright reported the choice.
+
     The plugin registers the ``scope`` selector engine, so the recorded
     selectors work in any test that imports Browser with this plugin.
     ``scope="Text"`` keeps the elements found so far whose closest visible
