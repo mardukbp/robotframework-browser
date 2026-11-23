@@ -22,6 +22,9 @@ class RecorderSelectors(LibraryComponent):
 
     - A number Playwright drops at the start or end of a text is given back:
       ``text="km/h bis 60 km/h"`` becomes ``text="46 km/h bis 60 km/h"``.
+    - An element found by CSS with ``:has-text()`` is recorded by its own
+      text, scoped by the text before it when the text is not unique:
+      ``text="Ja" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"``.
     - A clicked element whose title is its description, and is unique on the
       page, is recorded by it: ``role=button[description="Close"s]``.
     - An element with an explicit role and aria-label is recorded by both,

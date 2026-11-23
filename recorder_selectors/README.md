@@ -21,6 +21,7 @@ the one before:
 | Rule | Playwright records | The plugin records |
 | --- | --- | --- |
 | `number_widening` | `internal:text="km/h bis 60 km/h"i` | `text="46 km/h bis 60 km/h"i` |
+| `has_text` | `label:has-text("Ja")` | `text="Ja" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"` |
 | `title_description` (clicks only) | `role=button[name="t"s]` | `role=button[description="Suche löschen"s]` |
 | `aria_label` | `#APD_\:\:SalesOrderType-inner-vhi` | `role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"` |
 | `label_scope` | `css=select >> nth=3` | `role=combobox >> scope="Mittelgeber*"` |

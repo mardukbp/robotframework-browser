@@ -6,6 +6,8 @@
 //                  attrs: [{ key, value, flag, quoted }] }
 //   text, label  { engine, prefix: "internal:text=" | "text=" | ..., value, flag }
 //   scope        { engine, text }
+//   hasText      { engine, raw, tag, value }: CSS such as `label:has-text("Ja")`,
+//                printed as it was
 //   id, nth, other  { engine, raw }: printed as they were
 //
 // A `flag` is `s` for an exact match, `i` for a case-insensitive part, or "".
@@ -22,6 +24,7 @@ const ROLE = /^((?:internal:)?role=)([a-z]+)/;
 const ATTRIBUTE = /\[([a-z-]+)(?:=(?:("(?:[^"\\]|\\.)*")([is]?)|([^\]"]*)))?\]/g;
 const TEXT = /^(internal:(text|label)=)("(?:[^"\\]|\\.)*")([is]?)$/;
 const NTH = /^nth=-?\d+$/;
+const HAS_TEXT = /^(?:css=)?([a-z][a-z0-9-]*):has-text\(("(?:[^"\\]|\\.)*")\)$/;
 const ID = /^(css=)?\s*(#|\[id[=~|^$*]?=)|^internal:attr=\[id=|^id=/;
 
 // ------------------------------------------------------------------ parse
@@ -109,6 +112,13 @@ function parseId(raw) {
   return { engine: "id", raw };
 }
 
+function parseHasText(raw) {
+  const match = HAS_TEXT.exec(raw);
+  if (!match) return undefined;
+  const [, tag, quoted] = match;
+  return { engine: "hasText", raw, tag, value: JSON.parse(quoted) };
+}
+
 function parseNth(raw) {
   if (!NTH.test(raw)) return undefined;
   return { engine: "nth", raw };
@@ -118,7 +128,15 @@ function parseOther(raw) {
   return { engine: "other", raw };
 }
 
-const PARSERS = [parseRole, parseText, parseScope, parseId, parseNth, parseOther];
+const PARSERS = [
+  parseRole,
+  parseText,
+  parseScope,
+  parseId,
+  parseHasText,
+  parseNth,
+  parseOther,
+];
 
 function toAttribute([, key, quoted, flag, plain]) {
   if (quoted === undefined) return { key, value: plain, flag: "", quoted: false };

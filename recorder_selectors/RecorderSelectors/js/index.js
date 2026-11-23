@@ -9,6 +9,7 @@ const selectLabels = require("./select_labels.js");
 // The selector rules, in order, each on the selector the one before returned.
 const SELECTOR_RULES = [
   require("./rules/number_widening.js"),
+  require("./rules/has_text.js"),
   require("./rules/title_description.js"),
   require("./rules/aria_label.js"),
   require("./rules/label_scope.js"),

@@ -9,6 +9,7 @@ const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
 const idEngine = require("../RecorderSelectors/js/rules/id_engine.js");
+const hasText = require("../RecorderSelectors/js/rules/has_text.js");
 const labelScope = require("../RecorderSelectors/js/rules/label_scope.js");
 const numberWidening = require("../RecorderSelectors/js/rules/number_widening.js");
 const titleDescription = require("../RecorderSelectors/js/rules/title_description.js");
@@ -172,6 +173,22 @@ describe("rules", () => {
     for (const raw of ["#order select", "css=#x", '[id="x"]', "id=x", "#a\\ b", "div"]) {
       assert.ok(idEngine.skipPart(parsePart(raw)) || replaced(raw).length === 0, raw);
     }
+  });
+
+  it("has_text records CSS with :has-text by the element's text, then scoped", () => {
+    assert.deepEqual(parsePart('label:has-text("Ja")'), {
+      engine: "hasText",
+      raw: 'label:has-text("Ja")',
+      tag: "label",
+      value: "Ja",
+    });
+    assert.equal(print(parse('label:has-text("Ja")').parts), 'label:has-text("Ja")');
+    assert.equal(hasText.skip(parse("css=label")), true);
+    const facts = { text: "Ja", scopeText: "Kontoinhaber?*" };
+    assert.deepEqual(candidates(hasText, 'label:has-text("Ja")', facts), [
+      'text="Ja"',
+      'text="Ja" >> scope="Kontoinhaber?*"',
+    ]);
   });
 
   it("title_description records a clicked element by its title", () => {
