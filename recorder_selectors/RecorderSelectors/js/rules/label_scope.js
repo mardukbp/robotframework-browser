@@ -1,22 +1,25 @@
-// A form control without an accessible name is recorded by the caption beside
-// it, which older forms put in a plain element instead of a <label>:
+// A form control without a name is found by its role, scoped by the caption
+// before it, which older forms put in a plain element instead of a <label>:
 //
 //   <td><span>Mittelgeber*</span><br><select name="...">...</select></td>
 //   css=select >> nth=3   becomes   role=combobox >> scope="Mittelgeber*"
+//
+// A selector by a label, or by a role and a name, stays, unless it needed `nth=`.
 
-const { role, scope, nameOf } = require("../selector.js");
+const { role, scope } = require("../selector.js");
+const {
+  notFoundByUniqueName,
+  isFormControl,
+  isNamedByLabel,
+  hasScope,
+  not,
+} = require("../conditions.js");
 
-// A selector by a label, or by a role and a name, is kept, unless it needed `nth=`.
-function skip({ target, nth }) {
-  if (nth) return false;
-  if (target.engine === "label") return true;
-  return target.engine === "role" && Boolean(nameOf(target));
-}
-
-function candidates({ facts }) {
-  if (!facts.isControl || facts.hasName) return [];
-  if (!facts.scopeText) return [];
-  return [[role(facts.role), scope(facts.scopeText)]];
-}
-
-module.exports = { name: "label_scope", skip, candidates };
+module.exports = {
+  name: "label_scope",
+  when: {
+    recorded: [notFoundByUniqueName],
+    element: [isFormControl, not(isNamedByLabel), hasScope],
+  },
+  tryInOrder: ({ element }) => [[role(element.role), scope(element.scopeText)]],
+};

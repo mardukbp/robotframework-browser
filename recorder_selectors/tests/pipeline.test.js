@@ -41,7 +41,7 @@ describe("pipeline", () => {
 });
 
 describe("selectorStep", () => {
-  const rule = { name: "never", skip: () => true, candidates: () => [] };
+  const rule = { name: "never", when: { recorded: [() => false] }, tryInOrder: () => [] };
 
   it("leaves an Action without a selector, or without a page, alone", async () => {
     const { run } = selectorStep(rule);
@@ -49,7 +49,7 @@ describe("selectorStep", () => {
     assert.equal(await run({ action: click, page: undefined }), undefined);
   });
 
-  it("keeps the selector when the rule skips it", async () => {
+  it("keeps the selector when a condition of the rule does not hold", async () => {
     const { run } = selectorStep(rule);
     assert.equal(await run({ action: click, page: { locator() {} } }), undefined);
   });

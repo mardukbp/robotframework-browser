@@ -1,33 +1,38 @@
-// An element Playwright scopes by an ancestor's id, often generated, or by its
-// CSS, is scoped by the text the user sees before it instead:
+// An element Playwright finds inside an ancestor, by the ancestor's id, often
+// generated, or by its CSS, is scoped by the text the user sees before it
+// instead:
 //
 //   [id="#category--12-content"] >> role=link[name*="RFCP® Robot Framework®"i]
 //   becomes   role=link[name*="RFCP® Robot Framework®"i] >> scope="Robot Framework"
 //
 //   pnw-ami-zahlungsart >> internal:text="Nein"i
 //   becomes   internal:text="Nein"i >> scope="Ist der Antragsteller auch der Kontoinhaber?*"
-//
-// A link may navigate away before the selector is checked; run_rules.js then
-// checks it against the snapshot taken when the link was pressed.
 
 const { scope } = require("../selector.js");
+const { hasScope } = require("../conditions.js");
 
-// The index of the last part that finds an ancestor by its id or its CSS.
-function lastAncestorPart({ afterFrames }) {
-  return afterFrames.findLastIndex(({ engine }) => engine === "id" || engine === "other");
+module.exports = {
+  name: "caption_scope",
+  when: {
+    recorded: [foundInsideAnAncestor],
+    element: [hasScope],
+  },
+  tryInOrder: ({ recorded, element }) => [
+    [...withoutTheAncestor(recorded), scope(element.scopeText)],
+  ],
+};
+
+// A part before the one that finds the element finds an ancestor by its id or CSS.
+function foundInsideAnAncestor(recorded) {
+  const ancestor = lastAncestorPart(recorded);
+  return ancestor !== -1 && ancestor < recorded.targetIndex;
 }
 
-// Only a chain with such a part before the part that finds the element.
-function skip(chain) {
-  const index = lastAncestorPart(chain);
-  if (index === -1) return true;
-  return index >= chain.targetIndex;
+// The parts inside the frames after that ancestor part.
+function withoutTheAncestor(recorded) {
+  return recorded.insideFrames.slice(lastAncestorPart(recorded) + 1);
 }
 
-function candidates({ facts, chain }) {
-  if (!facts.scopeText) return [];
-  const afterAncestor = chain.afterFrames.slice(lastAncestorPart(chain) + 1);
-  return [[...afterAncestor, scope(facts.scopeText)]];
+function lastAncestorPart({ insideFrames }) {
+  return insideFrames.findLastIndex(({ engine }) => engine === "id" || engine === "other");
 }
-
-module.exports = { name: "caption_scope", skip, candidates };

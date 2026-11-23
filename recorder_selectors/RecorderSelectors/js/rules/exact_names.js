@@ -20,66 +20,59 @@ const {
   withAttribute,
   text,
 } = require("../selector.js");
+const { foundByName, matchedLoosely } = require("../conditions.js");
 
-// Only a selector whose name, or description, is not matched exactly yet.
-function skip({ target }) {
-  const name = nameOf(target);
-  if (!name) return true;
-  return !isLoose(name) && !isLoose(descriptionOf(target));
-}
+module.exports = {
+  name: "exact_names",
+  when: {
+    recorded: [foundByName, matchedLoosely],
+  },
+  tryInOrder: ({ recorded, element }) => {
+    const { target, insideFrames, targetIndex } = recorded;
+    return exactTargets(target, element).map((exact) =>
+      replaceAt(insideFrames, targetIndex, exact),
+    );
+  },
+};
 
-// The chain with the target part made exact, for every name the element may
-// be found by.
-function candidates({ facts, chain }) {
-  const { target, afterFrames, targetIndex } = chain;
-  const names = namesOf(target, facts);
-  let exactParts;
+// The target made exact, for every name the element may be found by.
+function exactTargets(target, element) {
+  const names = namesOf(target, element);
   if (target.engine === "role") {
-    exactParts = names.flatMap((name) => exactRoles(target, name, facts));
-  } else {
-    exactParts = exactTexts(target, names);
+    return names.flatMap((name) => exactRoles(target, name, element));
   }
-  return exactParts.map((exact) => replaceAt(afterFrames, targetIndex, exact));
+  return exactTexts(target, names);
 }
 
 // The names to try: the one Playwright recorded, then the element's own.
-function namesOf(target, facts) {
-  const names = [nameOf(target).value, facts.name, facts.text, ...facts.texts]
+function namesOf(target, element) {
+  const names = [nameOf(target).value, element.name, element.text, ...element.texts]
     .map(normalizeSpace)
     .filter(Boolean);
   return [...new Set(names)];
 }
 
-// The exact forms of a `role` part with the exact name `name`: without a loose
-// description, with it made exact, or with it as it was.
-function exactRoles(target, name, facts) {
+// A `role` part with the exact name `name`: without a loose description, with
+// it made exact, or with it as it was.
+function exactRoles(target, name, element) {
   const named = withName(target, name, true);
-  if (!isLoose(descriptionOf(target))) return [named];
+  const description = attributeOf(target, "description");
+  if (!description || description.exact) return [named];
   const forms = [withAttribute(named, "description", undefined)];
-  if (facts.description) {
-    forms.push(withAttribute(named, "description", facts.description, true));
+  if (element.description) {
+    forms.push(withAttribute(named, "description", element.description, true));
   }
   forms.push(named);
   return forms;
 }
 
-// The exact forms of a `text` or `label` part: `text="..."` first, for a text.
+// A `text` or `label` part with each exact name: `text="..."` first, for a text.
 function exactTexts(target, names) {
   const exact = names.map((name) => withName(target, name, true));
   if (target.engine !== "text") return exact;
   return [...names.map(text), ...exact];
 }
 
-function isLoose(text) {
-  return Boolean(text) && !text.exact;
-}
-
-function descriptionOf(part) {
-  return attributeOf(part, "description");
-}
-
 function normalizeSpace(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
-
-module.exports = { name: "exact_names", skip, candidates };

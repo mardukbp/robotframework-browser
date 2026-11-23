@@ -9,7 +9,7 @@ const { pressScript } = require("./page.js");
 const PRESS_BINDING = "__rfbRecorderSelectorsPress";
 const PRESS_MAX_AGE_MS = 10000;
 
-// The facts of the element last pressed on each page, with their time.
+// The description of the element last pressed on each page, with its time.
 const lastPressByPage = new WeakMap();
 
 // The page script that takes a snapshot of the element at every press.
@@ -18,17 +18,17 @@ const PRESSES = {
   binding: { name: PRESS_BINDING, receive: rememberPress },
 };
 
-// The facts of the element pressed on `page` in the last ten seconds, if any.
+// The description of the element pressed on `page` in the last ten seconds, if any.
 function recentPress(page) {
   const press = lastPressByPage.get(page);
   if (!press) return undefined;
   if (Date.now() - press.at > PRESS_MAX_AGE_MS) return undefined;
-  return press.facts;
+  return press.element;
 }
 
-function rememberPress(page, facts) {
-  if (!facts || typeof facts !== "object") return;
-  lastPressByPage.set(page, { facts, at: Date.now() });
+function rememberPress(page, element) {
+  if (!element || typeof element !== "object") return;
+  lastPressByPage.set(page, { element, at: Date.now() });
 }
 
 // The page scripts already installed, by context.

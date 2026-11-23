@@ -1,34 +1,45 @@
-// Runs the rules on a recorded Action and checks what they propose in the page.
-// It reads from the top down: the hook, a step, a rule, the two ways a rule
-// proposes selectors, and last the questions asked of the page.
+// Runs the rules on a recorded Action and checks in the page what they propose.
+// It reads from the top down: the hook, a step, a rule, the two kinds of rule,
+// and last the questions asked of the page.
 //
 // A step is `{ name, run }`: `run({ action, page, context })` gives the Action
 // to record, or undefined to keep it, as Browser's `__recordedAction` does.
 //
-// A rule is an object:
+// A rule says when it applies and which selectors to try then, in the manner
+// of Clara Rules. It tests three facts with the conditions of conditions.js:
+//
+//   action    the Action Playwright recorded
+//   recorded  the selector Playwright recorded, as data (`parse` in selector.js)
+//   element   the description of the recorded element (`describeElement` in page.js)
+//
+// A rule for the whole selector:
 //
 //   name        for the log in playwright-log.txt.
-//   actions     optional: the Action names (`click`, `fill`, ...) it rewrites;
-//               a pick arrives as the Action `pick`.
-//   skip        optional: `(chain) => boolean`, true leaves the selector alone.
-//   candidates  `({ facts, chain }) => [parts, ...]`: the selectors to try, in
-//               order, each a list of parts (see selector.js) without the
-//               frames. `facts` describe the recorded element (see page.js).
-//               Falsy entries are ignored.
-//   includeHidden  optional: check `role` parts with `include-hidden=true`, for
-//               a click that hides the page behind a dialog.
-//   fallback    optional: "nth" uses the first candidate with `>> nth=<index>`
-//               when no candidate finds only the element.
-//   eachPart    instead of `candidates`: `({ part, facts }) => [part, ...]`, the
-//               replacements to try for one part of the chain, `facts`
-//               describing the element the chain up to that part finds.
-//   skipPart    optional, with `eachPart`: `(part) => boolean`, true leaves the
-//               part alone without looking it up in the page.
+//   when        `{ action, recorded, element }`, each a list of conditions on
+//               that fact; the rule applies when all of them hold.
+//   tryInOrder  `({ recorded, element }) => [selector, ...]`: the selectors to
+//               try, each a part or a list of parts (see selector.js) without
+//               the frames. The first that finds only the recorded element is
+//               recorded. A selector with a missing part is left out, so
+//               `[part, scope(element.scopeText)]` needs no scope to be there.
+//   checkHiddenElementsToo  optional: look for `role` parts among hidden
+//               elements too, for a click that hides the page behind a dialog.
+//   otherwiseUseIndex  optional: when no selector finds only the element, the
+//               first one with `>> nth=<index>` of the element.
 //
-// Rules only compute with data; everything that asks the page is here. A
-// candidate is used only when it finds exactly the recorded element. When the
-// recorded selector no longer finds it, for example after a click navigated,
-// the candidates are checked against the snapshot taken at the press.
+// A rule for each part on its own:
+//
+//   name        for the log.
+//   when        optional `{ action }`.
+//   forEachPart `{ when: [condition, ...], tryInOrder: ({ part, element }) =>
+//               [part, ...] }`: for each part the conditions hold for, the
+//               replacements to try; the first that keeps finding the same
+//               element replaces it. `element` describes the element the
+//               selector up to that part finds.
+//
+// When the recorded selector no longer finds the element, for example after a
+// click navigated, the selectors are checked against the snapshot taken at the
+// press.
 
 const {
   replaceAt,
@@ -36,7 +47,7 @@ const {
   findAsync,
   mapUntilAsync,
 } = require("./fp.js");
-const { ELEMENT_FACTS } = require("./page.js");
+const { DESCRIBE_ELEMENT } = require("./page.js");
 const { recentPress } = require("./page_scripts.js");
 const {
   parse,
@@ -90,55 +101,66 @@ function selectorStep(rule) {
 
 // The selector `rule` records for `action`, or undefined to keep it.
 function applyRule(rule, action, page) {
-  if (rule.actions && !rule.actions.includes(action.name)) return undefined;
-  const chain = parse(action.selector);
-  if (rule.skip?.(chain)) return undefined;
-  if (rule.eachPart) return replaceParts(rule, page, chain);
-  return tryCandidates(rule, page, chain);
+  const when = rule.when ?? {};
+  if (!allHold(when.action, action)) return undefined;
+  const recorded = parse(action.selector);
+  if (rule.forEachPart) return replaceParts(rule.forEachPart, page, recorded);
+  if (!allHold(when.recorded, recorded)) return undefined;
+  return trySelectors(rule, page, recorded);
 }
 
-// ---------------------------------------------------- a rule's candidates
+function allHold(conditions, fact) {
+  return (conditions ?? []).every((condition) => condition(fact));
+}
 
-// The first candidate of `rule` that finds only the recorded element.
-async function tryCandidates(rule, page, chain) {
+// ------------------------------------------------ a rule for the whole selector
+
+// The first selector of `rule` that finds only the recorded element.
+async function trySelectors(rule, page, recorded) {
   const log = logFor(rule.name);
-  const element = await findRecordedElement(page, chain);
-  if (!element.facts) {
-    log(`${chain.selector} finds ${element.count} elements, kept`);
+  const found = await findRecordedElement(page, recorded);
+  if (!found.element) {
+    log(`${recorded.selector} finds ${found.count} elements, kept`);
     return undefined;
   }
   try {
-    const candidates = candidateSelectors(rule, element.facts, chain);
+    const proposed = selectorsToTry(rule, { recorded, element: found.element });
     const checked = await mapUntilAsync(
-      candidates,
-      (candidate) => checkCandidate(page, element, chain, candidate, rule),
+      proposed,
+      (selector) => checkSelector(page, found, recorded, selector, rule),
       findsOnlyTheElement,
     );
-    const { selector, rejected } = pickSelector(rule, element, checked);
+    const { selector, rejected } = pickSelector(rule, found, checked);
     rejected.map(whyRejected).forEach(log);
-    if (!selector && candidates.length > 0) log(`${chain.selector} kept`);
+    if (!selector && proposed.length > 0) log(`${recorded.selector} kept`);
     return selector;
   } finally {
-    await element.handle?.dispose();
+    await found.handle?.dispose();
   }
 }
 
-// `{ parts, selector }` for each candidate of `rule`, the selector with the frames.
-function candidateSelectors(rule, facts, chain) {
-  const candidates = rule.candidates({ facts, chain }) || [];
-  return candidates.filter(Boolean).map((parts) => ({
-    parts,
-    selector: print([...chain.frames, ...parts]),
-  }));
+// `{ parts, selector }` for each selector `rule` tries, the selector with the
+// frames; none when one of its conditions does not hold. It asks nothing of
+// the page.
+function selectorsToTry(rule, { action, recorded, element }) {
+  const when = rule.when ?? {};
+  if (action && !allHold(when.action, action)) return [];
+  if (!allHold(when.recorded, recorded)) return [];
+  if (!allHold(when.element, element)) return [];
+  return rule
+    .tryInOrder({ recorded, element })
+    .map((selector) => [selector].flat())
+    .filter((parts) => parts.length > 0 && parts.every(Boolean))
+    .map((parts) => ({ parts, selector: print([...recorded.frames, ...parts]) }));
 }
 
-// The candidate with `match`: how many elements it finds, and where the
+// The selector with `match`: how many elements it finds, and where the
 // recorded element is among them.
-async function checkCandidate(page, element, chain, candidate, rule) {
-  let parts = candidate.parts;
-  if (rule.includeHidden) parts = parts.map(withHidden);
-  const match = await countMatches(page, element, chain.frames, parts);
-  return { ...candidate, match };
+async function checkSelector(page, found, recorded, proposed, rule) {
+  let parts = proposed.parts;
+  if (rule.checkHiddenElementsToo) parts = parts.map(withHidden);
+  const match = await countMatches(page, found, recorded.frames, parts);
+  return { ...proposed, match };
 }
 
 function findsOnlyTheElement({ match }) {
@@ -146,23 +168,23 @@ function findsOnlyTheElement({ match }) {
   return match.count === 1 && match.index === 0;
 }
 
-// `{ selector, rejected }`: the candidate that finds only the element, or the
-// first one with `nth=` when the rule falls back to that, and the candidates
+// `{ selector, rejected }`: the selector that finds only the element, or the
+// first one with `nth=` when the rule falls back to that, and the selectors
 // rejected before it.
-function pickSelector(rule, element, checked) {
-  const found = checked.find(findsOnlyTheElement);
-  if (found) {
-    const rejected = checked.slice(0, checked.indexOf(found));
-    return { selector: found.selector, rejected };
+function pickSelector(rule, found, checked) {
+  const unique = checked.find(findsOnlyTheElement);
+  if (unique) {
+    const rejected = checked.slice(0, checked.indexOf(unique));
+    return { selector: unique.selector, rejected };
   }
-  return { selector: nthFallback(rule, element, checked), rejected: checked };
+  return { selector: withIndex(rule, found, checked), rejected: checked };
 }
 
-// The first checked candidate with `>> nth=<index>` of the recorded element,
+// The first checked selector with `>> nth=<index>` of the recorded element,
 // when the rule falls back to that and the element is in the page.
-function nthFallback(rule, element, checked) {
-  if (rule.fallback !== "nth") return undefined;
-  if (!element.handle) return undefined;
+function withIndex(rule, found, checked) {
+  if (!rule.otherwiseUseIndex) return undefined;
+  if (!found.handle) return undefined;
   const first = checked.find(({ match }) => match);
   if (!first || first.match.index < 0) return undefined;
   return `${first.selector} >> nth=${first.match.index}`;
@@ -173,23 +195,23 @@ function whyRejected({ selector, match }) {
   return `${selector} finds ${match.count} elements`;
 }
 
-// ---------------------------------------------- a rule's part replacements
+// ------------------------------------------------- a rule for each part
 
-// The chain with each part replaced by the first replacement of `eachPart`
-// that finds only the element the chain finds, part after part.
-async function replaceParts(rule, page, chain) {
-  const replaceNext = (parts, _, i) => replacePart(rule, page, parts, i);
-  const replaced = await reduceAsync(chain.parts, replaceNext, chain.parts);
-  if (replaced === chain.parts) return undefined;
+// The parts with each replaced by the first replacement that keeps finding
+// the same element, part after part.
+async function replaceParts(forEachPart, page, recorded) {
+  const replaceNext = (parts, _, i) => replacePart(forEachPart, page, parts, i);
+  const replaced = await reduceAsync(recorded.parts, replaceNext, recorded.parts);
+  if (replaced === recorded.parts) return undefined;
   return print(replaced);
 }
 
-async function replacePart(rule, page, parts, i) {
+async function replacePart(forEachPart, page, parts, i) {
   const part = parts[i];
-  if (rule.skipPart?.(part)) return parts;
-  const facts = await factsOf(page, print(parts.slice(0, i + 1)));
-  if (!facts) return parts;
-  const replacements = rule.eachPart({ part, facts }).filter(Boolean);
+  if (!allHold(forEachPart.when, part)) return parts;
+  const element = await describe(page, print(parts.slice(0, i + 1)));
+  if (!element) return parts;
+  const replacements = replacementsToTry(forEachPart, { part, element });
   const findsTheSame = (replacement) => {
     const candidate = print(replaceAt(parts, i, replacement));
     return findsSameElement(page, candidate, print(parts));
@@ -199,45 +221,52 @@ async function replacePart(rule, page, parts, i) {
   return replaceAt(parts, i, replacement);
 }
 
+// The replacements `forEachPart` tries for `part`; none when one of its
+// conditions does not hold. It asks nothing of the page.
+function replacementsToTry(forEachPart, { part, element }) {
+  if (!allHold(forEachPart.when, part)) return [];
+  return forEachPart.tryInOrder({ part, element }).filter(Boolean);
+}
+
 // ---------------------------------------------------- the recorded element
 
-// The recorded element: `{ facts, handle }` in the page, `{ facts, peers }`
+// The recorded element: `{ element, handle }` in the page, `{ element, peers }`
 // from the press when the page changed and the press was on what the selector
 // names, or else `{ count }`. Playwright makes the selector find only the
 // element, so finding none or several means the page changed, for example a
 // click navigated to a page with more such elements.
-async function findRecordedElement(page, chain) {
-  const recorded = page.locator(chain.selector);
-  const count = await recorded.count();
+async function findRecordedElement(page, recorded) {
+  const locator = page.locator(recorded.selector);
+  const count = await locator.count();
   if (count === 1) {
-    const handle = await recorded.elementHandle({ timeout: TIMEOUT_MS });
-    const facts = await handle.evaluate(ELEMENT_FACTS, false);
-    return { facts, handle };
+    const handle = await locator.elementHandle({ timeout: TIMEOUT_MS });
+    const element = await handle.evaluate(DESCRIBE_ELEMENT, false);
+    return { element, handle };
   }
-  const press = recentPress(page);
-  if (wasPressed(press, chain.target) && press.peers)
-    return { facts: press, peers: press.peers };
+  const pressed = recentPress(page);
+  if (wasPressed(pressed, recorded.target) && pressed.peers)
+    return { element: pressed, peers: pressed.peers };
   return { count };
 }
 
-// Whether `press` is on what the `role` part `target` names.
-function wasPressed(press, target) {
-  if (!press) return false;
+// Whether `pressed` is what the `role` part `target` names.
+function wasPressed(pressed, target) {
+  if (!pressed) return false;
   if (target.engine !== "role") return false;
   const name = nameOf(target);
   if (!name) return false;
-  return target.role === press.role && textMatches(press.name, name);
+  return target.role === pressed.role && textMatches(pressed.name, name);
 }
 
 // `{ count, index }`: how many elements `parts` finds after `frames`, and the
 // index of the recorded element among them; from its peers at the press when
 // the page changed, or undefined when that cannot tell.
-async function countMatches(page, element, frames, parts) {
-  if (!element.handle) return countPeers(element.peers, parts);
-  return findElement(page, print([...frames, ...parts]), element.handle);
+async function countMatches(page, found, frames, parts) {
+  if (!found.handle) return countPeers(found.peers, parts);
+  return findElement(page, print([...frames, ...parts]), found.handle);
 }
 
-// Like `countMatches`, for a candidate of the form `role=...` or
+// Like `countMatches`, for a selector of the form `role=...` or
 // `role=... >> scope=...`, the only ones the peers can answer for.
 function countPeers(peers, [rolePart, scopePart, ...more]) {
   if (rolePart?.engine !== "role") return undefined;
@@ -251,8 +280,8 @@ function countPeers(peers, [rolePart, scopePart, ...more]) {
     if (scopePart && peer.scopeText !== scopePart.text) return false;
     return true;
   };
-  const found = peers.filter(isFound);
-  return { count: found.length, index: found.findIndex((p) => p.isTarget) };
+  const matching = peers.filter(isFound);
+  return { count: matching.length, index: matching.findIndex((p) => p.isTarget) };
 }
 
 // ------------------------------------------------------ asking the page
@@ -264,13 +293,13 @@ function countPeers(peers, [rolePart, scopePart, ...more]) {
 // CDP, before Browser can register the engine there. Counting and element
 // handles query in the engine's own world.
 
-// The facts of the element `selector` finds, if it finds only one.
-async function factsOf(page, selector) {
+// The description of the element `selector` finds, if it finds only one.
+async function describe(page, selector) {
   const locator = page.locator(selector);
   if ((await locator.count()) !== 1) return undefined;
   const handle = await locator.elementHandle({ timeout: TIMEOUT_MS });
   try {
-    return await handle.evaluate(ELEMENT_FACTS, false);
+    return await handle.evaluate(DESCRIBE_ELEMENT, false);
   } finally {
     await handle.dispose();
   }
@@ -291,12 +320,12 @@ async function findsSameElement(page, candidate, selector) {
 // `{ count, index }`: how many elements `selector` finds, and the index of
 // `target` among them.
 async function findElement(page, selector, target) {
-  const found = await page.locator(selector).elementHandles();
+  const all = await page.locator(selector).elementHandles();
   try {
-    const index = await target.evaluate((element, all) => all.indexOf(element), found);
-    return { count: found.length, index };
+    const index = await target.evaluate((element, found) => found.indexOf(element), all);
+    return { count: all.length, index };
   } finally {
-    await Promise.all(found.map((handle) => handle.dispose()));
+    await Promise.all(all.map((handle) => handle.dispose()));
   }
 }
 
@@ -328,4 +357,4 @@ function logFor(name) {
   return (message) => console.log(`recorder_selectors ${name}: ${message}`);
 }
 
-module.exports = { pipeline, selectorStep };
+module.exports = { pipeline, selectorStep, selectorsToTry, replacementsToTry };

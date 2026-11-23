@@ -8,11 +8,11 @@ const CLICKABLE =
   "a, button, input, select, textarea, summary, [role=link], [role=button], " +
   "[role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option]";
 
-// What the rules know about `element`: an approximation of what Playwright
-// computes, used to choose candidates; the page decides whether a candidate
-// finds the element. With `withPeers`, also the elements with the same role, to
-// check candidates against when the page is gone.
-function elementFacts(element, withPeers) {
+// What the rules read as `element`: a description of `element` that
+// approximates what Playwright computes. It chooses the selectors to try; the
+// page decides whether one finds the element. With `withPeers`, also the
+// elements with the same role, to check selectors against when the page is gone.
+function describeElement(element, withPeers) {
   function normalizeSpace(text) {
     return (text || "").replace(/\s+/g, " ").trim();
   }
@@ -165,13 +165,13 @@ function elementFacts(element, withPeers) {
       }));
   }
 
-  // --- the facts
+  // --- the description
 
   const role = roleOf(element);
   const ariaLabel = attributeText(element, "aria-label");
   const hasLabelledBy = element.hasAttribute("aria-labelledby");
   const hasLabel = labelTextsOf(element).length > 0;
-  const facts = {
+  const described = {
     tag: element.localName,
     role,
     explicitRole: explicitRoleOf(element),
@@ -190,8 +190,8 @@ function elementFacts(element, withPeers) {
     scopeText: scopeOf(element),
     texts: textsOf(element),
   };
-  if (!withPeers || !role) return facts;
-  return { ...facts, peers: peersWithRole(role) };
+  if (!withPeers || !role) return described;
+  return { ...described, peers: peersWithRole(role) };
 }
 
 // `fn` with `helpers` defined inside its body, so it can run in the page.
@@ -204,12 +204,12 @@ function withHelpersInside(fn, helpers) {
   )();
 }
 
-// `elementFacts` as Playwright can run it in the page.
-const ELEMENT_FACTS = withHelpersInside(elementFacts, { scopeOf });
+// `describeElement` as Playwright can run it in the page.
+const DESCRIBE_ELEMENT = withHelpersInside(describeElement, { scopeOf });
 
 // At each trusted press, outside Browser's toolbar and Playwright's overlay,
-// sends the facts of the pressed element, with its peers, through `binding`.
-function reportPresses(binding, clickable, elementFacts) {
+// sends the description of the pressed element, with its peers, through `binding`.
+function reportPresses(binding, clickable, describeElement) {
   if (window.__rfbRecorderSelectorsInstalled) return;
   window.__rfbRecorderSelectorsInstalled = true;
 
@@ -224,7 +224,7 @@ function reportPresses(binding, clickable, elementFacts) {
     const element = pressedElement(event);
     if (!element) return;
     try {
-      window[binding](elementFacts(element, true));
+      window[binding](describeElement(element, true));
     } catch {
       // A page that blocks the binding records without the snapshot.
     }
@@ -235,8 +235,8 @@ function reportPresses(binding, clickable, elementFacts) {
 
 // The source that reports every press through the binding `binding`.
 function pressScript(binding) {
-  const args = [JSON.stringify(binding), JSON.stringify(CLICKABLE), ELEMENT_FACTS];
+  const args = [JSON.stringify(binding), JSON.stringify(CLICKABLE), DESCRIBE_ELEMENT];
   return `(${reportPresses})(${args.join(", ")});`;
 }
 
-module.exports = { ELEMENT_FACTS, pressScript };
+module.exports = { DESCRIBE_ELEMENT, pressScript };

@@ -76,63 +76,83 @@ scripts, so a page listener at `window` in the capture phase could relabel unnot
 RecorderSelectors/
   __init__.py          the plugin: loads js/index.js, registers the scope engine
   js/index.js          the JS extension: select labels, then the rules, in order
-  js/selector.js       selectors as data: parse, print, read and build parts (pure)
-  js/page.js           what runs in the page: the facts about an element, the press snapshot
-  js/run_rules.js      runs the rules on an Action and checks their candidates in the page
-  js/page_scripts.js   installs the scripts that run in the page, keeps what they report
-  js/fp.js             a few Clojure-like helpers: replaceAt, firstDefined, reduceAsync, ...
-  js/select_labels.js  records a select by the labels of the chosen options
-  js/scope.js          the scope selector engine
   js/rules/*.js        one rule per file
+  js/conditions.js     the named conditions the rules state in their `when`
+  js/selector.js       selectors as data: parse, print, read and build parts (pure)
+  js/run_rules.js      runs the rules on an Action and checks what they try in the page
+  js/page.js           what runs in the page: the description of an element, the press snapshot
+  js/page_scripts.js   installs the scripts that run in the page, keeps what they report
+  js/scope.js          the scope selector engine
+  js/select_labels.js  records a select by the labels of the chosen options
+  js/fp.js             a few Clojure-like helpers: replaceAt, firstDefined, reduceAsync, ...
 tests/                 unit tests, for node --test
 atest/                 acceptance tests, for robot, with their page and its server
 ```
 
 ## Writing a rule
 
-A rule is a plain object; `js/run_rules.js` documents every field. A rule never writes selector
-syntax: `js/selector.js` parses a selector into parts, plain objects such as
-`{engine: "role", role: "link", attrs: [{key: "name", value: "Details", flag: "i", ...}]}`,
-and prints the parts a rule returns. Most rules only say which parts to try, given the facts
-about the recorded element:
+A rule reads like a rule of [Clara Rules](https://www.clara-rules.org/): when its
+conditions hold, it tries some selectors. The conditions test three facts:
+
+- `action`: the Action Playwright recorded, such as a click,
+- `recorded`: the selector Playwright recorded, as data (`parse` in `js/selector.js`),
+- `element`: what the page tells about the recorded element (`describeElement` in `js/page.js`).
 
 ```js
-const { role, scope, nameOf } = require("../selector.js");
+const { role } = require("../selector.js");
+const { isClick, foundByRoleAndName, hasRole, hasTitle, hasDescriptionOfItsOwn, not } =
+  require("../conditions.js");
 
 module.exports = {
-  name: "label_scope",
-  skip: ({ target, nth }) =>
-    !nth && (target.engine === "label" || (target.engine === "role" && nameOf(target))),
-  candidates: ({ facts }) =>
-    facts.isControl && !facts.hasName && facts.scopeText
-      ? [[role(facts.role), scope(facts.scopeText)]]
-      : [],
+  name: "title_description",
+  when: {
+    action: [isClick],
+    recorded: [foundByRoleAndName],
+    element: [hasRole, hasTitle, not(hasDescriptionOfItsOwn)],
+  },
+  tryInOrder: ({ element }) => [role(element.role, { description: element.title })],
 };
 ```
 
-`js/run_rules.js` runs it: it parses the selector into its chain, finds the recorded element, gathers
-its facts in the page, checks each candidate there and uses the first that finds only that
-element. When the recorded selector finds nothing any more, because the click navigated or
-removed the element, the facts and the check come from a snapshot taken when the element
-was pressed; only candidates of the form `role=...` or `role=... >> scope=...` can be
-checked that way. A rule that changes parts where they are instead, like `number_widening`,
-gives `eachPart`, the replacements for one part given the facts of the element the chain up
-to that part finds; `run_rules.js` tries them part after part. Rules only compute with data,
-so they can be tested without a page; `run_rules.js` does everything that asks the page.
+Each condition is a function with a name that says what it asks; `js/conditions.js` holds
+those the rules share, and a rule defines its own below its `module.exports`. `tryInOrder`
+gives the selectors to try, each a part or a list of parts. A rule never writes selector
+syntax: `js/selector.js` parses a selector into parts, plain objects such as
+`{engine: "role", role: "link", attrs: [{key: "name", value: "Details", flag: "i", ...}]}`,
+builds them (`role`, `text`, `scope`) and prints them. A selector with a missing part is
+left out, so `[byText, scope(element.scopeText)]` is tried only when there is a scope.
+
+`js/run_rules.js` runs a rule: when the conditions on the Action and the recorded selector
+hold, it finds the recorded element, describes it in the page, checks the conditions on it,
+tries each selector there and records the first that finds only that element.
+`checkHiddenElementsToo` and `otherwiseUseIndex` change how the selectors are tried; the
+comment at the top of `run_rules.js` documents every field. When the recorded selector finds
+nothing any more, because the click navigated or removed the element, the description and
+the check come from a snapshot taken when the element was pressed; only selectors of the
+form `role=...` or `role=... >> scope=...` can be checked that way.
+
+A rule that rewrites each part where it is, like `id_engine` and `number_widening`, gives
+`forEachPart` instead: `{ when: [conditions on a part], tryInOrder: ({ part, element }) =>
+[part, ...] }`, where `element` describes the element the selector up to that part finds.
+
+Rules only compute with data, so they can be tested without a page: `selectorsToTry` and
+`replacementsToTry` of `run_rules.js` give what a rule tries for a recorded selector and a
+description of an element.
 
 Add the rule to the list in `js/index.js`. Functions that run in the page must use nothing
 from outside their own body, since Playwright sends them there as source text; `page.js`
-puts the helpers of `elementFacts` inside its body for that reason.
+puts the helpers of `describeElement` inside its body for that reason.
 
 ## Limits
 
-- The facts (`role`, `name`, `description`, ...) approximate what Playwright computes. They
-  choose the candidates; only the check in the page, or against the snapshot, decides.
+- The description of an element (`role`, `name`, `description`, ...) approximates what
+  Playwright computes. It chooses the selectors to try; only the check in the page, or
+  against the snapshot, decides.
 - All rules share the 2 seconds Browser waits for the hooks of one selector.
 - With `Connect To Browser    use_cdp=True`, a page that logged elements to the console
   before the connection lacks the `scope` engine in its main world: Playwright sets that
   world up while it attaches, before the engine can be registered in it. The plugin
-  checks its candidates only with counts and element handles, which query in the
+  checks the selectors it tries only with counts and element handles, which query in the
   engine's own world, and so do Browser's actions; `Evaluate JavaScript` with a
   `scope=` selector fails on such a page until it is reloaded.
 - Browser instances that share one Node process, as in pabot, keep their JS extensions

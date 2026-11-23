@@ -1,13 +1,32 @@
-// Gives back the number Playwright's selector generator drops at the start or
-// the end of a text, taking it for a count that changes: a radio labelled
-// "46 km/h bis 60 km/h" is recorded as `internal:text="km/h bis 60 km/h"i`. The
-// whole text is used when it still finds the same element and only it.
+// Each name or text gets back the number Playwright's selector generator drops
+// at its start or end, taking it for a count that changes:
+//
+//   a radio labelled "46 km/h bis 60 km/h"
+//   internal:text="km/h bis 60 km/h"i   becomes   internal:text="46 km/h bis 60 km/h"i
 
 const { firstDefined } = require("../fp.js");
 const { nameOf, withName } = require("../selector.js");
+const { findsByName } = require("../conditions.js");
 
-// Playwright keeps at most 80 characters of a text; a longer source was cut, not stripped.
-const MAX_SOURCE_LENGTH = 200;
+module.exports = {
+  name: "number_widening",
+  forEachPart: {
+    when: [findsByName],
+    tryInOrder: ({ part, element }) => {
+      const names = textsOfElement(element).flatMap((text) =>
+        withDroppedNumber(nameOf(part).value, text),
+      );
+      return [...new Set(names)].map((name) => withName(part, name));
+    },
+  },
+};
+
+// Playwright keeps at most 80 characters of a text; a longer one was cut, not stripped.
+const MAX_TEXT_LENGTH = 200;
+
+function textsOfElement(element) {
+  return element.texts.filter((text) => text.length <= MAX_TEXT_LENGTH);
+}
 
 // Where Playwright drops a number, as its own patterns find it: the number,
 // the text with the number stripped, and the name with the number restored,
@@ -25,26 +44,10 @@ const DROPPED_NUMBERS = [
   },
 ];
 
-// Only a chain with a name or text in it.
-function skip({ parts }) {
-  return !parts.some(nameOf);
-}
-
-function skipPart(part) {
-  return !nameOf(part);
-}
-
-// The part with each name that gives back the number Playwright dropped.
-function eachPart({ part, facts }) {
-  const sources = facts.texts.filter((text) => text.length <= MAX_SOURCE_LENGTH);
-  const names = sources.flatMap((source) => withNumber(nameOf(part).value, source));
-  return [...new Set(names)].map((name) => withName(part, name));
-}
-
-// `name` with the number Playwright dropped from `source`, in every spelling of
+// `name` with the number Playwright dropped from `text`, in every spelling of
 // the space between them; none if it dropped none.
-function withNumber(name, source) {
-  const full = normalizeSpace(source);
+function withDroppedNumber(name, text) {
+  const full = normalizeSpace(text);
   const wanted = normalizeSpace(name);
   if (!wanted || full === wanted) return [];
   const restored = firstDefined(DROPPED_NUMBERS, (dropped) =>
@@ -66,12 +69,10 @@ function restoreNumber(dropped, full, name, wanted) {
 // The spellings of the space between number and text that a match may need: a
 // no-break space stays in an accessible name.
 function spacesAround(text) {
-  if (/^\s|\s$/.test(text)) return [" ", "\u00a0"];
+  if (/^\s|\s$/.test(text)) return [" ", " "];
   return [""];
 }
 
 function normalizeSpace(text) {
   return text.replace(/\s+/g, " ").trim();
 }
-
-module.exports = { name: "number_widening", skip, skipPart, eachPart };

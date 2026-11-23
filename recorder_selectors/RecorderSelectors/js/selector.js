@@ -30,27 +30,27 @@ const ID = /^(css=)?\s*(#|\[id[=~|^$*]?=)|^internal:attr=\[id=|^id=/;
 
 // ------------------------------------------------------------------ parse
 
-// The chain of `selector`:
+// The selector `selector` as data, as the rules read it, `recorded`:
 //   parts        every part
 //   frames       the parts up to the last frame it enters
-//   afterFrames  the parts after them
-//   target       the part of `afterFrames` the element is found by: the last
-//                one before the `scope` and `nth` filters that end the chain
-//   targetIndex  its index in `afterFrames`
+//   insideFrames  the parts after them, inside the last frame
+//   target       the part of `insideFrames` the element is found by: the last
+//                one before the `scope` and `nth` filters that end the selector
+//   targetIndex  its index in `insideFrames`
 //   nth          the `nth` filter after it, if any
 function parse(selector) {
   const parts = selector.split(SEPARATOR).map(parsePart);
   const frames = parts.slice(0, parts.findLastIndex(entersFrame) + 1);
-  const afterFrames = parts.slice(frames.length);
-  const targetIndex = targetIndexIn(afterFrames);
+  const insideFrames = parts.slice(frames.length);
+  const targetIndex = targetIndexIn(insideFrames);
   return {
     selector,
     parts,
     frames,
-    afterFrames,
-    target: afterFrames[targetIndex] ?? parsePart(""),
+    insideFrames,
+    target: insideFrames[targetIndex] ?? parsePart(""),
     targetIndex,
-    nth: afterFrames.slice(targetIndex + 1).find(isNth),
+    nth: insideFrames.slice(targetIndex + 1).find(isNth),
   };
 }
 
@@ -74,7 +74,7 @@ function isFilter(part) {
   return isNth(part) || part.engine === "scope";
 }
 
-// One part of a chain, by the first parser that recognizes it.
+// One part of a selector, by the first parser that recognizes it.
 function parsePart(raw) {
   return firstDefined(PARSERS, (parser) => parser(raw));
 }
@@ -261,8 +261,10 @@ function text(value) {
   return { engine: "text", prefix: "text=", value, flag: "" };
 }
 
-// The `scope` filter keeping the elements whose scope is `text`.
+// The `scope` filter keeping the elements whose scope is `text`; undefined
+// when there is no text, which leaves out the selector it would be part of.
 function scope(text) {
+  if (!text) return undefined;
   return { engine: "scope", text };
 }
 
