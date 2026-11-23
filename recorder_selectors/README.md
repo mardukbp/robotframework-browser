@@ -45,7 +45,9 @@ selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
 
 `scope="Text"` keeps the elements found so far whose closest visible text before them is
 `Text`. Text in links, buttons and form controls is skipped, and so is text before an
-element with the same tag, role and name.
+element with the same tag, role and name. A text beside the element in one of its
+ancestors, as in `<label>Hersteller Ihres Fahrzeuges <a role="button">`, is a scope on
+its own, without the rest of that ancestor's text.
 
 ## Select options by label
 

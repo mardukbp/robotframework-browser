@@ -50,6 +50,20 @@ A Recorded Value Help Of An Input Without A Name Is Recorded By Its Role, Aria L
     Should Be Equal    ${selector}    role=button[name="Wertehilfe einblenden"s] >> nth=2
     Get Attribute    ${selector}    id    ==    APD_::Note-inner-vhi
 
+A Tooltip Inside The Label Of Its Field Is Scoped By The Text Before It
+    Add Elements
+    ...    <label for="modell">Modell <a id="modell-tip" role="button" aria-label="Information anzeigen" tabindex="0">i</a></label>
+    ...    <select id="modell"></select>
+    ...    <label for="hersteller">Hersteller Ihres Fahrzeuges <a id="hersteller-tip" role="button" aria-label="Information anzeigen" tabindex="0">i</a></label>
+    ...    <select id="hersteller"></select>
+    ${selector} =    Recorded Click
+    ...    id=hersteller-tip
+    ...    internal:role=button[name="Information anzeigen"i] >> nth=1
+    Should Be Equal
+    ...    ${selector}
+    ...    role=button[name="Information anzeigen"s] >> scope="Hersteller Ihres Fahrzeuges"
+    Get Attribute    ${selector}    id    ==    hersteller-tip
+
 
 *** Keywords ***
 Open Page With Value Help Fields

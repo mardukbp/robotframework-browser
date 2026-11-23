@@ -5,7 +5,9 @@
 //
 // The scope of an element is the last visible text before it in its closest
 // ancestor that has such a text. Text inside links, buttons and form controls
-// is skipped, so the names of sibling links are never a scope. Only text after
+// is skipped, so the names of sibling links are never a scope. A text beside
+// the element in one of its ancestors, as in `<label>Text <a role="button">`,
+// is a scope on its own. Only text after
 // the last lookalike before the element counts, a lookalike being an element
 // with the same tag, role and name, since a text before it would not tell the
 // two apart. The scope is looked up whenever the selector is used, so the
@@ -74,6 +76,25 @@ function scopeOf(element) {
     return isVisible(e);
   }
 
+  // The scope text that the text node `node` before the element gives, or "":
+  // the whole text of its element, or, when that element contains the element
+  // too, as in `<label>Hersteller <a role="button">`, the text of `node` alone.
+  function scopeTextFrom(node) {
+    if (normalizeSpace(node.textContent) === "") return "";
+    const parent = node.parentElement;
+    if (!parent) return "";
+    if (parent.contains(element)) return textBesideElement(node);
+    if (!isScopeElement(parent)) return "";
+    return normalizeSpace(parent.textContent);
+  }
+
+  function textBesideElement(node) {
+    const parent = node.parentElement;
+    if (parent.closest(NAMED_BY_THEIR_TEXT)) return "";
+    if (!isVisible(parent)) return "";
+    return normalizeSpace(node.textContent);
+  }
+
   // The text nodes of `root` before the element, in document order.
   function textNodesBefore(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -102,13 +123,12 @@ function scopeOf(element) {
   function scopeIn(ancestor) {
     const lookalike = lastLookalikeBefore(ancestor);
     const afterLookalike = (node) => !lookalike || precedes(lookalike, node);
-    const isScopeText = (node) =>
-      normalizeSpace(node.textContent) !== "" && isScopeElement(node.parentElement);
     const lastText = textNodesBefore(ancestor)
       .filter(afterLookalike)
-      .filter(isScopeText)
+      .map(scopeTextFrom)
+      .filter(Boolean)
       .at(-1);
-    if (lastText) return normalizeSpace(lastText.parentElement.textContent);
+    if (lastText) return lastText;
     // Any text further up comes before the lookalike too.
     if (lookalike) return null;
     return undefined;
