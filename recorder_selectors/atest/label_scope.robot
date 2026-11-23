@@ -39,7 +39,7 @@ A Select In An Iframe Is Recorded By Its Caption
     ...    double
     Should Be Equal
     ...    ${action}[selector]
-    ...    \#booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
+    ...    id=booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
     Get Property    ${action}[selector]    value    ==    double
 
 A Select In A Cross-Origin Iframe Is Recorded By Its Caption
@@ -58,7 +58,7 @@ A Select In A Cross-Origin Iframe Is Recorded By Its Caption
     ...    double
     Should Be Equal
     ...    ${action}[selector]
-    ...    \#booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
+    ...    id=booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
     Get Property    ${action}[selector]    value    ==    double
 
 A Select With A Label Keeps Its Name

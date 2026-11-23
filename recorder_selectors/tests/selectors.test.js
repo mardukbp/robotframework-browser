@@ -8,6 +8,7 @@ const selector = require("../RecorderSelectors/js/selector.js");
 const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
+const idEngine = require("../RecorderSelectors/js/rules/id_engine.js");
 const labelScope = require("../RecorderSelectors/js/rules/label_scope.js");
 const numberWidening = require("../RecorderSelectors/js/rules/number_widening.js");
 const titleDescription = require("../RecorderSelectors/js/rules/title_description.js");
@@ -158,6 +159,17 @@ describe("rules", () => {
     ]);
     assert.deepEqual(numberWidening.eachPart({ part, facts: { texts: ["km/h bis 60 km/h"] } }), []);
     assert.ok(numberWidening.skipPart(parsePart("css=div")));
+  });
+
+  it("id_engine writes a CSS id, of a frame or an element, with the id engine", () => {
+    const replaced = (raw) => idEngine.eachPart({ part: parsePart(raw), facts: {} }).map((p) => print([p]));
+    assert.deepEqual(replaced("#oevd-iframe"), ["id=oevd-iframe"]);
+    assert.deepEqual(replaced("#APD_\\:\\:SalesOrderType-inner-vhi"), ["id=APD_::SalesOrderType-inner-vhi"]);
+    assert.deepEqual(replaced("#\\31 23"), ["id=123"]);
+    assert.equal(idEngine.skip(parse("#oevd-iframe >> internal:control=enter-frame >> internal:text=\"A\"i")), false);
+    for (const raw of ["#order select", "css=#x", '[id="x"]', "id=x", "#a\\ b", "div"]) {
+      assert.ok(idEngine.skipPart(parsePart(raw)) || replaced(raw).length === 0, raw);
+    }
   });
 
   it("title_description records a clicked element by a title equal to its text", () => {

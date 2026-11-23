@@ -269,11 +269,19 @@ async function factsOf(page, selector) {
   return locator.evaluate(ELEMENT_FACTS, false, { timeout: TIMEOUT_MS });
 }
 
-// Whether `candidate` finds only the element `selector` finds.
+// Whether `candidate` finds only the element `selector` finds. The elements are
+// compared in the page, since Playwright combines no locators that enter frames.
 async function findsSameElement(page, candidate, selector) {
   const locator = page.locator(candidate);
   if ((await locator.count()) !== 1) return false;
-  return (await locator.and(page.locator(selector)).count()) === 1;
+  const recorded = await page.locator(selector).elementHandle({ timeout: TIMEOUT_MS });
+  try {
+    return await locator.evaluate((found, target) => found === target, recorded, {
+      timeout: TIMEOUT_MS,
+    });
+  } finally {
+    await recorded.dispose();
+  }
 }
 
 // ---------------------------------------------------------------- helpers

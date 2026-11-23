@@ -26,14 +26,18 @@ the one before:
 | `label_scope` | `css=select >> nth=3` | `role=combobox >> scope="Mittelgeber*"` |
 | `caption_scope` | `[id="#category--12-content"] >> role=link[name*="Details"i]` | `role=link[name*="Details"i] >> scope="Robot Framework"` |
 | `exact_names` | `role=link[name*="RFCP® Robot"i]` | `role=link[name="RFCP® Robot Framework® Certified Professional"s]` |
+| `id_engine` | `#oevd-iframe >> internal:control=enter-frame >> ...` | `id=oevd-iframe >> internal:control=enter-frame >> ...` |
 
-`exact_names` comes last: the name or text the selector finds its element by, after the
+`exact_names` comes after the rules that choose a name: the name or text the selector finds its element by, after the
 `scope=` and `nth=` filters, is made an exact match with the element's whole name, so the
 other rules' results end up exact too, for example
 `role=link[name="Details & Termine"s] >> scope="Robot Framework"`. A text becomes
 `text="46 km/h bis 60 km/h"` when that finds the element, which holds the text in its own
 text nodes; otherwise it stays the exact internal form, which Browser writes as an anchored
 regular expression such as `text=/^\s*46\s+km\/h\s+bis\s+60\s+km\/h\s*$/`.
+
+`id_engine` writes every part that is only a CSS id, of a frame or of an element, with the
+`id` engine and without CSS escapes: `#APD_\:\:Note` becomes `id=APD_::Note`.
 
 A rewritten selector is used only when it finds exactly the recorded element; otherwise the
 selector is kept and the reason is logged in `playwright-log.txt`, prefixed with

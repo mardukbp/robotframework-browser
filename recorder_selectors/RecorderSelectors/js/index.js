@@ -14,6 +14,7 @@ const SELECTOR_RULES = [
   require("./rules/label_scope.js"),
   require("./rules/caption_scope.js"),
   require("./rules/exact_names.js"),
+  require("./rules/id_engine.js"),
 ];
 
 // A choice in a select is first recorded by its labels, on Playwright's own
