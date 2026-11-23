@@ -1,6 +1,6 @@
 *** Settings ***
 Documentation     The title_description rule of the RecorderSelectors plugin: a click on an
-...               element whose title equals its text and is unique on the page is recorded as
+...               element whose title is its description and unique on the page is recorded as
 ...               role=<role>[description="<title>"s] instead of by its name. Any other click,
 ...               and a picked selector, are kept as Playwright made them.
 
@@ -42,10 +42,25 @@ A Button Removed By Its Click Is Recorded By Its Description Seen At The Press
     ${selector} =    Recorded Click    css=[aria-label="Close dialog"]    internal:role=button[name="Close dialog"i]
     Should Be Equal    ${selector}    role=button[description="Close"s]
 
-A Button Whose Title Differs From Its Text Keeps Its Name
+A Button Whose Title Differs From Its Text Is Recorded By Its Description
     Add Elements    <button aria-label="Open menu" title="Menu">=</button>
     ${selector} =    Recorded Click    css=[aria-label="Open menu"]    internal:role=button[name="Open menu"i]
-    Should Be Equal    ${selector}    internal:role=button[name="Open menu"s]
+    Should Be Equal    ${selector}    role=button[description="Menu"s]
+    Get Attribute    ${selector}    aria-label    ==    Open menu
+
+A Button Named By The Glyph Of Its Icon Font Is Recorded By Its Title
+    Add Elements
+    ...    <style>.fo-delete::before { content: "t"; }</style>
+    ...    <button id="clear" title="Suche löschen" type="button"><i class="fo-delete"></i></button>
+    ${selector} =    Recorded Click    id=clear    internal:role=button[name="t"s]
+    Should Be Equal    ${selector}    role=button[description="Suche löschen"s]
+    Get Attribute    ${selector}    id    ==    clear
+
+A Button Named Only By Its Title Is Recorded By Its Title Too
+    Add Elements    <button id="search" title="Suchen" type="button"></button>
+    ${selector} =    Recorded Click    id=search    internal:role=button[name="Suchen"i]
+    Should Be Equal    ${selector}    role=button[description="Suchen"s]
+    Get Attribute    ${selector}    id    ==    search
 
 A Button Whose Title Is Used Twice Keeps Its Name
     Add Elements

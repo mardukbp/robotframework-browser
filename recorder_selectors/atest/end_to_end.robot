@@ -18,7 +18,7 @@ Test Tags           recorder    end-to-end
 Every Click Of A Recording Is Rewritten On Its Own
     Add Elements
     ...    <button aria-label="Close dialog" title="Close">Close</button>
-    ...    <button aria-label="Open menu" title="Menu">=</button>
+    ...    <button aria-label="Open menu">=</button>
     ...    <button aria-label="Open help" title="Help">Help</button>
     ${promise} =    Start Recording    Click Titled
     Click    css=[aria-label="Close dialog"]

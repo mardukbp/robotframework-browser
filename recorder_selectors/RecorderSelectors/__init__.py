@@ -22,7 +22,7 @@ class RecorderSelectors(LibraryComponent):
 
     - A number Playwright drops at the start or end of a text is given back:
       ``text="km/h bis 60 km/h"`` becomes ``text="46 km/h bis 60 km/h"``.
-    - A clicked element whose title equals its text, and is unique on the
+    - A clicked element whose title is its description, and is unique on the
       page, is recorded by it: ``role=button[description="Close"s]``.
     - An element with an explicit role and aria-label is recorded by both,
       scoped by the text before it or with ``nth=`` when they are not unique:

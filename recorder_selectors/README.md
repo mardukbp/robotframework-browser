@@ -21,7 +21,7 @@ the one before:
 | Rule | Playwright records | The plugin records |
 | --- | --- | --- |
 | `number_widening` | `internal:text="km/h bis 60 km/h"i` | `text="46 km/h bis 60 km/h"i` |
-| `title_description` (clicks only) | `role=button[name*="Close dialog"i]` | `role=button[description="Close"s]` |
+| `title_description` (clicks only) | `role=button[name="t"s]` | `role=button[description="Suche löschen"s]` |
 | `aria_label` | `#APD_\:\:SalesOrderType-inner-vhi` | `role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"` |
 | `label_scope` | `css=select >> nth=3` | `role=combobox >> scope="Mittelgeber*"` |
 | `caption_scope` | `[id="#category--12-content"] >> role=link[name*="Details"i]` | `role=link[name*="Details"i] >> scope="Robot Framework"` |

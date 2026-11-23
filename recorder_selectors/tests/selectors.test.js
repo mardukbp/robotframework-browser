@@ -172,10 +172,12 @@ describe("rules", () => {
     }
   });
 
-  it("title_description records a clicked element by a title equal to its text", () => {
-    const facts = { role: "button", title: "Close", text: "Close", hasDescription: false };
-    const selector = 'internal:role=button[name="Close dialog"i]';
+  it("title_description records a clicked element by its title", () => {
+    const selector = 'internal:role=button[name="t"s]';
+    const facts = { role: "button", title: "Suche löschen", text: "", hasDescription: false };
     assert.deepEqual(titleDescription.actions, ["click"]);
-    assert.deepEqual(candidates(titleDescription, selector, facts), ['role=button[description="Close"s]']);
+    assert.deepEqual(candidates(titleDescription, selector, facts), ['role=button[description="Suche löschen"s]']);
+    assert.deepEqual(candidates(titleDescription, selector, { ...facts, hasDescription: true }), []);
+    assert.deepEqual(candidates(titleDescription, selector, { ...facts, title: "" }), []);
   });
 });
