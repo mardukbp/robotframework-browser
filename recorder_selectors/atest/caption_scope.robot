@@ -1,8 +1,8 @@
 *** Settings ***
-Documentation     The caption_scope rule of the RecorderSelectors plugin: a link whose name is
-...               not unique, which Playwright scopes by the id of an ancestor, is recorded by
-...               its name, scoped by the closest text before it. Text inside other links is no
-...               scope.
+Documentation     The caption_scope rule of the RecorderSelectors plugin: an element whose name
+...               is not unique, which Playwright scopes by the id or the CSS of an ancestor, is
+...               recorded by its name, scoped by the closest text before it. Text inside other
+...               links, and the label of another option, is no scope.
 
 Library           Browser    plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py
 Resource          recorder.resource
@@ -45,6 +45,22 @@ A Link That Navigates Away Is Scoped By The Category Title Seen At The Click
     Close Page
     Open Page With Course Categories
     Get Attribute    ${selector}    href    ==    \#rfcp
+
+An Option Scoped By A Custom Element Is Scoped By Its Question, Not By The Option Before
+    Add Elements
+    ...    <x-versicherung><label>Ist der Antragsteller auch der Halter?*</label><div class="radio-list">
+    ...    <div><input type="radio" name="halter" id="halter-ja"><label for="halter-ja">Ja</label></div>
+    ...    <div><input type="radio" name="halter" id="halter-nein"><label for="halter-nein">Nein</label></div></div></x-versicherung>
+    ...    <x-zahlungsart><label>Ist der Antragsteller auch der Kontoinhaber?*</label><div class="radio-list">
+    ...    <div><input type="radio" name="konto" id="konto-ja"><label for="konto-ja">Ja</label></div>
+    ...    <div><input type="radio" name="konto" id="konto-nein"><label for="konto-nein">Nein</label></div></div></x-zahlungsart>
+    ${selector} =    Recorded Click
+    ...    css=x-zahlungsart >> text="Nein"
+    ...    x-zahlungsart >> internal:text="Nein"i
+    Should Be Equal
+    ...    ${selector}
+    ...    text="Nein" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"
+    Get Attribute    ${selector}    for    ==    konto-nein
 
 
 *** Keywords ***

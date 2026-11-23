@@ -25,6 +25,7 @@ the one before:
 | `aria_label` | `#APD_\:\:SalesOrderType-inner-vhi` | `role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"` |
 | `label_scope` | `css=select >> nth=3` | `role=combobox >> scope="Mittelgeber*"` |
 | `caption_scope` | `[id="#category--12-content"] >> role=link[name*="Details"i]` | `role=link[name*="Details"i] >> scope="Robot Framework"` |
+| `caption_scope` | `pnw-ami-zahlungsart >> internal:text="Nein"i` | `text="Nein" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"` |
 | `exact_names` | `role=link[name*="RFCP® Robot"i]` | `role=link[name="RFCP® Robot Framework® Certified Professional"s]` |
 | `id_engine` | `#oevd-iframe >> internal:control=enter-frame >> ...` | `id=oevd-iframe >> internal:control=enter-frame >> ...` |
 
@@ -44,7 +45,8 @@ selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
 `recorder_selectors <rule>:`.
 
 `scope="Text"` keeps the elements found so far whose closest visible text before them is
-`Text`. Text in links, buttons and form controls is skipped, and so is text before an
+`Text`. Text in links, buttons and form controls is skipped, and so is the label of a
+radio button or checkbox, which names that option, and text before an
 element with the same tag, role and name. A text beside the element in one of its
 ancestors, as in `<label>Hersteller Ihres Fahrzeuges <a role="button">`, is a scope on
 its own, without the rest of that ancestor's text.

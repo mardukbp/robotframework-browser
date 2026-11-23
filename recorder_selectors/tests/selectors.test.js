@@ -139,6 +139,8 @@ describe("rules", () => {
       'internal:role=link[name="Details"i] >> scope="Robot Framework"',
     ]);
     assert.equal(captionScope.skip(parse('internal:role=link >> [id="x"]')), true);
+    assert.equal(captionScope.skip(parse('pnw-ami-zahlungsart >> internal:text="Nein"i')), false);
+    assert.equal(captionScope.skip(parse("css=select >> nth=3")), true);
   });
 
   it("aria_label records an explicit role by its aria-label, then scoped", () => {

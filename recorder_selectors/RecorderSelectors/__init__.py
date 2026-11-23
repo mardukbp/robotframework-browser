@@ -29,7 +29,7 @@ class RecorderSelectors(LibraryComponent):
       ``role=button[name="Wertehilfe einblenden"s] >> scope="Kundenauftragsart"``.
     - A form control without an accessible name is recorded by the caption
       beside it: ``role=combobox >> scope="Mittelgeber*"``.
-    - An element scoped by the id of an ancestor is scoped by the text before
+    - An element scoped by the id or CSS of an ancestor is scoped by the text before
       it: ``role=link[name*="Details"i] >> scope="Robot Framework"``.
     - Last, the name or text the selector finds its element by is matched
       exactly, with the element's whole name:
@@ -51,7 +51,8 @@ class RecorderSelectors(LibraryComponent):
     selectors work in any test that imports Browser with this plugin.
     ``scope="Text"`` keeps the elements found so far whose closest visible
     text before them is ``Text``. Text in links, buttons and form controls is
-    skipped, and so is text before an element with the same tag, role and name.
+    skipped, and so is the label of a radio button or checkbox, and text before
+    an element with the same tag, role and name.
     """
 
     def __init__(self, library: Browser):

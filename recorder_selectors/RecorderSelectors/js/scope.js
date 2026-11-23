@@ -5,7 +5,8 @@
 //
 // The scope of an element is the last visible text before it in its closest
 // ancestor that has such a text. Text inside links, buttons and form controls
-// is skipped, so the names of sibling links are never a scope. A text beside
+// is skipped, so the names of sibling links are never a scope, and so is the
+// label of a radio button or checkbox, the name of another option. A text beside
 // the element in one of its ancestors, as in `<label>Text <a role="button">`,
 // is a scope on its own. Only text after
 // the last lookalike before the element counts, a lookalike being an element
@@ -67,10 +68,22 @@ function scopeOf(element) {
     return e.checkVisibility();
   }
 
+  // Within a label of a radio button or checkbox, whose text is the name of
+  // that option: "Ja" is no scope of "Nein".
+  function isInOptionLabel(e) {
+    const control = e.closest("label")?.control;
+    if (!control) return false;
+    return control.matches("input[type=radio], input[type=checkbox]");
+  }
+
+  function isNamedByItsText(e) {
+    return Boolean(e.closest(NAMED_BY_THEIR_TEXT)) || isInOptionLabel(e);
+  }
+
   function isScopeElement(e) {
     if (!e) return false;
     if (e.contains(element)) return false;
-    if (e.closest(NAMED_BY_THEIR_TEXT)) return false;
+    if (isNamedByItsText(e)) return false;
     if (e.querySelector(NAMED_BY_THEIR_TEXT)) return false;
     if (normalizeSpace(e.textContent) === "") return false;
     return isVisible(e);
@@ -90,7 +103,7 @@ function scopeOf(element) {
 
   function textBesideElement(node) {
     const parent = node.parentElement;
-    if (parent.closest(NAMED_BY_THEIR_TEXT)) return "";
+    if (isNamedByItsText(parent)) return "";
     if (!isVisible(parent)) return "";
     return normalizeSpace(node.textContent);
   }
