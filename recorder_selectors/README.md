@@ -124,6 +124,12 @@ puts the helpers of `elementFacts` inside its body for that reason.
 - The facts (`role`, `name`, `description`, ...) approximate what Playwright computes. They
   choose the candidates; only the check in the page, or against the snapshot, decides.
 - All rules share the 2 seconds Browser waits for the hooks of one selector.
+- With `Connect To Browser    use_cdp=True`, a page that logged elements to the console
+  before the connection lacks the `scope` engine in its main world: Playwright sets that
+  world up while it attaches, before the engine can be registered in it. The plugin
+  checks its candidates only with counts and element handles, which query in the
+  engine's own world, and so do Browser's actions; `Evaluate JavaScript` with a
+  `scope=` selector fails on such a page until it is reloaded.
 - Browser instances that share one Node process, as in pabot, keep their JS extensions
   apart, but share its selector engines: once one of them imports the plugin, `scope=` works
   in all of them.

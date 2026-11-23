@@ -234,12 +234,7 @@ function wasPressed(press, target) {
 // the page changed, or undefined when that cannot tell.
 async function countMatches(page, element, frames, parts) {
   if (!element.handle) return countPeers(element.peers, parts);
-  const locator = page.locator(print([...frames, ...parts]));
-  const [count, index] = await locator.evaluateAll(
-    (found, target) => [found.length, found.indexOf(target)],
-    element.handle,
-  );
-  return { count, index };
+  return findElement(page, print([...frames, ...parts]), element.handle);
 }
 
 // Like `countMatches`, for a candidate of the form `role=...` or
@@ -261,26 +256,47 @@ function countPeers(peers, [rolePart, scopePart, ...more]) {
 }
 
 // ------------------------------------------------------ asking the page
+//
+// Selectors are only counted or turned into element handles, never evaluated
+// on a locator: Playwright evaluates a locator in the page's main world, whose
+// selector engines may lack `scope`. A page that logs elements to the console
+// makes Playwright set up that world while Connect To Browser attaches over
+// CDP, before Browser can register the engine there. Counting and element
+// handles query in the engine's own world.
 
 // The facts of the element `selector` finds, if it finds only one.
 async function factsOf(page, selector) {
   const locator = page.locator(selector);
   if ((await locator.count()) !== 1) return undefined;
-  return locator.evaluate(ELEMENT_FACTS, false, { timeout: TIMEOUT_MS });
+  const handle = await locator.elementHandle({ timeout: TIMEOUT_MS });
+  try {
+    return await handle.evaluate(ELEMENT_FACTS, false);
+  } finally {
+    await handle.dispose();
+  }
 }
 
-// Whether `candidate` finds only the element `selector` finds. The elements are
-// compared in the page, since Playwright combines no locators that enter frames.
+// Whether `candidate` finds only the element `selector` finds.
 async function findsSameElement(page, candidate, selector) {
-  const locator = page.locator(candidate);
-  if ((await locator.count()) !== 1) return false;
+  if ((await page.locator(candidate).count()) !== 1) return false;
   const recorded = await page.locator(selector).elementHandle({ timeout: TIMEOUT_MS });
   try {
-    return await locator.evaluate((found, target) => found === target, recorded, {
-      timeout: TIMEOUT_MS,
-    });
+    const { index } = await findElement(page, candidate, recorded);
+    return index === 0;
   } finally {
     await recorded.dispose();
+  }
+}
+
+// `{ count, index }`: how many elements `selector` finds, and the index of
+// `target` among them.
+async function findElement(page, selector, target) {
+  const found = await page.locator(selector).elementHandles();
+  try {
+    const index = await target.evaluate((element, all) => all.indexOf(element), found);
+    return { count: found.length, index };
+  } finally {
+    await Promise.all(found.map((handle) => handle.dispose()));
   }
 }
 

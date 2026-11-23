@@ -61,6 +61,15 @@ A Select In A Cross-Origin Iframe Is Recorded By Its Caption
     ...    id=booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
     Get Property    ${action}[selector]    value    ==    double
 
+A Field Whose Label Names A Wrapper With The Same Id Is Recorded By The Label
+    Add Elements
+    ...    <div><label for="firma">Firmenname*</label>
+    ...    <div><span id="firma"><input type="text" id="firma"></span></div></div>
+    Fill Text    css=input#firma    imbus
+    ${action} =    Recorded Action    ${{ {"name": "fill", "selector": "#firma >> nth=1", "text": "imbus"} }}
+    Should Be Equal    ${action}[selector]    role=textbox >> scope="Firmenname*"
+    Get Property    ${action}[selector]    value    ==    imbus
+
 A Select With A Label Keeps Its Name
     ${action} =    Recorded Select    id=payment    internal:label="Payment"i    invoice
     Should Be Equal    ${action}[selector]    internal:label="Payment"s
