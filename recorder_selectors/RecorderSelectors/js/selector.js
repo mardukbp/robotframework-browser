@@ -12,7 +12,7 @@
 //
 // A `flag` is `s` for an exact match, `i` for a case-insensitive part, or "".
 
-const { firstDefined } = require("./fp.js");
+const { firstDefined, replaceAt } = require("./fp.js");
 const { scopeTextOf, scopeSelector } = require("./scope.js");
 
 const ENTER_FRAME = "internal:control=enter-frame";
@@ -221,6 +221,11 @@ function withAttribute(part, key, value, exact) {
   return { ...part, attrs: part.attrs.flatMap(changed) };
 }
 
+// The parts of `recorded` inside its frames, with `part` instead of the target.
+function withTarget(recorded, part) {
+  return replaceAt(recorded.insideFrames, recorded.targetIndex, part);
+}
+
 // The `role` part that also finds hidden elements.
 function withHidden(part) {
   if (part.engine !== "role") return part;
@@ -276,6 +281,7 @@ module.exports = {
   attributeOf,
   withName,
   withAttribute,
+  withTarget,
   withHidden,
   role,
   text,

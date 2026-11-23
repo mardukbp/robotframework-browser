@@ -8,14 +8,14 @@ const selector = require("../RecorderSelectors/js/selector.js");
 const ariaLabel = require("../RecorderSelectors/js/rules/aria_label.js");
 const captionScope = require("../RecorderSelectors/js/rules/caption_scope.js");
 const exactNames = require("../RecorderSelectors/js/rules/exact_names.js");
-const idEngine = require("../RecorderSelectors/js/rules/id_engine.js");
+const { withIdEngine } = require("../RecorderSelectors/js/id_engine.js");
 const hasText = require("../RecorderSelectors/js/rules/has_text.js");
 const labelScope = require("../RecorderSelectors/js/rules/label_scope.js");
 const numberWidening = require("../RecorderSelectors/js/rules/number_widening.js");
 const titleDescription = require("../RecorderSelectors/js/rules/title_description.js");
 
 const { parse, parsePart, print, nameOf, attributeOf, withName } = selector;
-const { selectorsToTry, replacementsToTry } = require("../RecorderSelectors/js/run_rules.js");
+const { selectorsToTry } = require("../RecorderSelectors/js/run_rules.js");
 
 describe("parse and print", () => {
   for (const selector of [
@@ -106,9 +106,6 @@ describe("rules", () => {
   // on the element `element`; none when the rule does not apply.
   const tried = (rule, recorded, element, action = { name: "click" }) =>
     selectorsToTry(rule, { action, recorded: parse(recorded), element }).map(({ selector }) => selector);
-  // The replacements a rule for each part tries for the part `raw`.
-  const replacements = (rule, raw, element = {}) =>
-    replacementsToTry(rule.forEachPart, { part: parsePart(raw), element }).map((part) => print([part]));
 
   it("exact_names makes the name exact and drops a loose description", () => {
     const element = { name: "Details & Termine", text: "Details & Termine", texts: [], description: "" };
@@ -164,20 +161,21 @@ describe("rules", () => {
   it("number_widening gives a text back the number Playwright dropped", () => {
     const element = { texts: ["46 km/h bis 60 km/h", "x".repeat(300)] };
     // Both spellings of the space after the number: a no-break space stays in a name.
-    assert.deepEqual(replacements(numberWidening, 'internal:text="km/h bis 60 km/h"i', element), [
-      'internal:text="46 km/h bis 60 km/h"i',
-      'internal:text="46 km/h bis 60 km/h"i',
+    assert.deepEqual(tried(numberWidening, 'internal:text="km/h bis 60 km/h"i >> nth=1', element), [
+      'internal:text="46 km/h bis 60 km/h"i >> nth=1',
+      'internal:text="46 km/h bis 60 km/h"i >> nth=1',
     ]);
-    assert.deepEqual(replacements(numberWidening, 'internal:text="km/h bis 60 km/h"i', { texts: ["km/h bis 60 km/h"] }), []);
-    assert.deepEqual(replacements(numberWidening, "css=div", element), []);
+    assert.deepEqual(tried(numberWidening, 'internal:text="km/h bis 60 km/h"i', { texts: ["km/h bis 60 km/h"] }), []);
+    assert.deepEqual(tried(numberWidening, "css=div", element), []);
   });
 
   it("id_engine writes a CSS id, of a frame or an element, with the id engine", () => {
-    assert.deepEqual(replacements(idEngine, "#oevd-iframe"), ["id=oevd-iframe"]);
-    assert.deepEqual(replacements(idEngine, "#APD_\\:\\:SalesOrderType-inner-vhi"), ["id=APD_::SalesOrderType-inner-vhi"]);
-    assert.deepEqual(replacements(idEngine, "#\\31 23"), ["id=123"]);
+    const written = (raw) => print([withIdEngine(parsePart(raw))]);
+    assert.equal(written("#oevd-iframe"), "id=oevd-iframe");
+    assert.equal(written("#APD_\\:\\:SalesOrderType-inner-vhi"), "id=APD_::SalesOrderType-inner-vhi");
+    assert.equal(written("#\\31 23"), "id=123");
     for (const raw of ["#order select", "css=#x", '[id="x"]', "id=x", "#a\\ b", "div"]) {
-      assert.deepEqual(replacements(idEngine, raw), [], raw);
+      assert.equal(written(raw), raw);
     }
   });
 

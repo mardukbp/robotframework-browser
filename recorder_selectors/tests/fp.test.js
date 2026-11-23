@@ -7,7 +7,7 @@ const {
   replaceAt,
   firstDefined,
   reduceAsync,
-  findAsync,
+  distinct,
   mapUntilAsync,
 } = require("../RecorderSelectors/js/fp.js");
 
@@ -55,11 +55,7 @@ describe("fp", () => {
     assert.deepEqual(await mapUntilAsync([], f, () => true), []);
   });
 
-  it("findAsync gives the first match and checks nothing after it", async () => {
-    const checked = [];
-    const pred = async (x) => (checked.push(x), x % 2 === 0);
-    assert.equal(await findAsync([1, 4, 6], pred), 4);
-    assert.deepEqual(checked, [1, 4]);
-    assert.equal(await findAsync([1, 3], pred), undefined);
+  it("distinct drops repeats and keeps the order", () => {
+    assert.deepEqual(distinct(["b", "a", "b", "c", "a"]), ["b", "a", "c"]);
   });
 });

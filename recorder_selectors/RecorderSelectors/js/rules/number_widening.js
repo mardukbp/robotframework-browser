@@ -1,23 +1,23 @@
-// Each name or text gets back the number Playwright's selector generator drops
-// at its start or end, taking it for a count that changes:
+// The name or text the element is found by gets back the number Playwright's
+// selector generator drops at its start or end, taking it for a count that
+// changes:
 //
 //   a radio labelled "46 km/h bis 60 km/h"
 //   internal:text="km/h bis 60 km/h"i   becomes   internal:text="46 km/h bis 60 km/h"i
 
-const { firstDefined } = require("../fp.js");
-const { nameOf, withName } = require("../selector.js");
-const { findsByName } = require("../conditions.js");
+const { firstDefined, distinct } = require("../fp.js");
+const { nameOf, withName, withTarget } = require("../selector.js");
+const { foundByName } = require("../conditions.js");
 
 module.exports = {
   name: "number_widening",
-  forEachPart: {
-    when: [findsByName],
-    tryInOrder: ({ part, element }) => {
-      const names = textsOfElement(element).flatMap((text) =>
-        withDroppedNumber(nameOf(part).value, text),
-      );
-      return [...new Set(names)].map((name) => withName(part, name));
-    },
+  when: {
+    recorded: [foundByName],
+  },
+  tryInOrder: ({ recorded, element }) => {
+    const recordedName = nameOf(recorded.target).value;
+    const names = textsOfElement(element).flatMap((text) => withDroppedNumber(recordedName, text));
+    return distinct(names).map((name) => withTarget(recorded, withName(recorded.target, name)));
   },
 };
 

@@ -5,6 +5,7 @@ const { pipeline, selectorStep } = require("./run_rules.js");
 const { install, PRESSES } = require("./page_scripts.js");
 const scopeEngine = require("./scope.js");
 const selectLabels = require("./select_labels.js");
+const idEngine = require("./id_engine.js");
 
 // The selector rules, in order, each on the selector the one before returned.
 const SELECTOR_RULES = [
@@ -15,14 +16,15 @@ const SELECTOR_RULES = [
   require("./rules/label_scope.js"),
   require("./rules/caption_scope.js"),
   require("./rules/exact_names.js"),
-  require("./rules/id_engine.js"),
 ];
 
 // A choice in a select is first recorded by its labels, on Playwright's own
-// selector; then the selector rules run.
+// selector; then the selector rules run, and last the CSS ids are written with
+// the id engine.
 module.exports.__recordedAction = pipeline([
   selectLabels.step,
   ...SELECTOR_RULES.map(selectorStep),
+  idEngine.step,
 ]);
 
 // Before the first recording in a context: the press snapshot and the chosen

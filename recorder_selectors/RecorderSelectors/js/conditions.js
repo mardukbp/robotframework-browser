@@ -5,17 +5,13 @@
 //   action    the Action Playwright recorded: `{ name, selector, ... }`
 //   recorded  the selector it recorded, as data (see `parse` in selector.js)
 //   element   what the page tells about the recorded element (see page.js)
-//
-// A rule that rewrites each part of the selector on its own tests the part.
 
 const { nameOf, attributeOf } = require("./selector.js");
 
 // ------------------------------------------------------------------- not
 
 function not(condition) {
-  const negated = (fact) => !condition(fact);
-  Object.defineProperty(negated, "name", { value: `not(${condition.name})` });
-  return negated;
+  return (fact) => !condition(fact);
 }
 
 // ---------------------------------------------------------------- action
@@ -28,7 +24,7 @@ function isClick(action) {
 
 // Found by a name: a role with a name, a text, or a label.
 function foundByName({ target }) {
-  return findsByName(target);
+  return Boolean(nameOf(target));
 }
 
 function foundByRoleAndName({ target }) {
@@ -68,13 +64,6 @@ function matchedLoosely({ target }) {
 
 function isLoose(text) {
   return Boolean(text) && !text.exact;
-}
-
-// ---------------------------------------------- a part of the recorded selector
-
-// A role with a name, a text, or a label.
-function findsByName(part) {
-  return Boolean(nameOf(part));
 }
 
 // --------------------------------------------------------------- element
@@ -133,7 +122,6 @@ module.exports = {
   notFoundByUniqueRoleAndName,
   notFoundByUniqueName,
   matchedLoosely,
-  findsByName,
   hasScope,
   hasRole,
   hasExplicitRole,

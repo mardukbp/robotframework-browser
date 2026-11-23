@@ -12,7 +12,7 @@
 //   recorded  the selector Playwright recorded, as data (`parse` in selector.js)
 //   element   the description of the recorded element (`describeElement` in page.js)
 //
-// A rule for the whole selector:
+// A rule:
 //
 //   name        for the log in playwright-log.txt.
 //   when        `{ action, recorded, element }`, each a list of conditions on
@@ -27,26 +27,11 @@
 //   otherwiseUseIndex  optional: when no selector finds only the element, the
 //               first one with `>> nth=<index>` of the element.
 //
-// A rule for each part on its own:
-//
-//   name        for the log.
-//   when        optional `{ action }`.
-//   forEachPart `{ when: [condition, ...], tryInOrder: ({ part, element }) =>
-//               [part, ...] }`: for each part the conditions hold for, the
-//               replacements to try; the first that keeps finding the same
-//               element replaces it. `element` describes the element the
-//               selector up to that part finds.
-//
 // When the recorded selector no longer finds the element, for example after a
 // click navigated, the selectors are checked against the snapshot taken at the
 // press.
 
-const {
-  replaceAt,
-  reduceAsync,
-  findAsync,
-  mapUntilAsync,
-} = require("./fp.js");
+const { reduceAsync, mapUntilAsync } = require("./fp.js");
 const { DESCRIBE_ELEMENT } = require("./page.js");
 const { recentPress } = require("./page_scripts.js");
 const {
@@ -104,7 +89,6 @@ function applyRule(rule, action, page) {
   const when = rule.when ?? {};
   if (!allHold(when.action, action)) return undefined;
   const recorded = parse(action.selector);
-  if (rule.forEachPart) return replaceParts(rule.forEachPart, page, recorded);
   if (!allHold(when.recorded, recorded)) return undefined;
   return trySelectors(rule, page, recorded);
 }
@@ -113,7 +97,7 @@ function allHold(conditions, fact) {
   return (conditions ?? []).every((condition) => condition(fact));
 }
 
-// ------------------------------------------------ a rule for the whole selector
+// ------------------------------------------------------ trying its selectors
 
 // The first selector of `rule` that finds only the recorded element.
 async function trySelectors(rule, page, recorded) {
@@ -195,39 +179,6 @@ function whyRejected({ selector, match }) {
   return `${selector} finds ${match.count} elements`;
 }
 
-// ------------------------------------------------- a rule for each part
-
-// The parts with each replaced by the first replacement that keeps finding
-// the same element, part after part.
-async function replaceParts(forEachPart, page, recorded) {
-  const replaceNext = (parts, _, i) => replacePart(forEachPart, page, parts, i);
-  const replaced = await reduceAsync(recorded.parts, replaceNext, recorded.parts);
-  if (replaced === recorded.parts) return undefined;
-  return print(replaced);
-}
-
-async function replacePart(forEachPart, page, parts, i) {
-  const part = parts[i];
-  if (!allHold(forEachPart.when, part)) return parts;
-  const element = await describe(page, print(parts.slice(0, i + 1)));
-  if (!element) return parts;
-  const replacements = replacementsToTry(forEachPart, { part, element });
-  const findsTheSame = (replacement) => {
-    const candidate = print(replaceAt(parts, i, replacement));
-    return findsSameElement(page, candidate, print(parts));
-  };
-  const replacement = await findAsync(replacements, findsTheSame);
-  if (!replacement) return parts;
-  return replaceAt(parts, i, replacement);
-}
-
-// The replacements `forEachPart` tries for `part`; none when one of its
-// conditions does not hold. It asks nothing of the page.
-function replacementsToTry(forEachPart, { part, element }) {
-  if (!allHold(forEachPart.when, part)) return [];
-  return forEachPart.tryInOrder({ part, element }).filter(Boolean);
-}
-
 // ---------------------------------------------------- the recorded element
 
 // The recorded element: `{ element, handle }` in the page, `{ element, peers }`
@@ -293,30 +244,6 @@ function countPeers(peers, [rolePart, scopePart, ...more]) {
 // CDP, before Browser can register the engine there. Counting and element
 // handles query in the engine's own world.
 
-// The description of the element `selector` finds, if it finds only one.
-async function describe(page, selector) {
-  const locator = page.locator(selector);
-  if ((await locator.count()) !== 1) return undefined;
-  const handle = await locator.elementHandle({ timeout: TIMEOUT_MS });
-  try {
-    return await handle.evaluate(DESCRIBE_ELEMENT, false);
-  } finally {
-    await handle.dispose();
-  }
-}
-
-// Whether `candidate` finds only the element `selector` finds.
-async function findsSameElement(page, candidate, selector) {
-  if ((await page.locator(candidate).count()) !== 1) return false;
-  const recorded = await page.locator(selector).elementHandle({ timeout: TIMEOUT_MS });
-  try {
-    const { index } = await findElement(page, candidate, recorded);
-    return index === 0;
-  } finally {
-    await recorded.dispose();
-  }
-}
-
 // `{ count, index }`: how many elements `selector` finds, and the index of
 // `target` among them.
 async function findElement(page, selector, target) {
@@ -357,4 +284,4 @@ function logFor(name) {
   return (message) => console.log(`recorder_selectors ${name}: ${message}`);
 }
 
-module.exports = { pipeline, selectorStep, selectorsToTry, replacementsToTry };
+module.exports = { pipeline, selectorStep, selectorsToTry };

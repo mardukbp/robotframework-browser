@@ -12,12 +12,13 @@
 // own text nodes; when that does not find the element, the exact internal
 // form is used, which Browser writes as an anchored regular expression.
 
-const { replaceAt } = require("../fp.js");
+const { distinct } = require("../fp.js");
 const {
   nameOf,
   attributeOf,
   withName,
   withAttribute,
+  withTarget,
   text,
 } = require("../selector.js");
 const { foundByName, matchedLoosely } = require("../conditions.js");
@@ -27,12 +28,8 @@ module.exports = {
   when: {
     recorded: [foundByName, matchedLoosely],
   },
-  tryInOrder: ({ recorded, element }) => {
-    const { target, insideFrames, targetIndex } = recorded;
-    return exactTargets(target, element).map((exact) =>
-      replaceAt(insideFrames, targetIndex, exact),
-    );
-  },
+  tryInOrder: ({ recorded, element }) =>
+    exactTargets(recorded.target, element).map((exact) => withTarget(recorded, exact)),
 };
 
 // The target made exact, for every name the element may be found by.
@@ -49,7 +46,7 @@ function namesOf(target, element) {
   const names = [nameOf(target).value, element.name, element.text, ...element.texts]
     .map(normalizeSpace)
     .filter(Boolean);
-  return [...new Set(names)];
+  return distinct(names);
 }
 
 // A `role` part with the exact name `name`: without a loose description, with

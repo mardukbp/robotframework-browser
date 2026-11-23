@@ -24,13 +24,9 @@ function reduceAsync(xs, f, init) {
   );
 }
 
-// The first `x` for which the async `pred` holds, checked one after the other;
-// `pred` is not called after it.
-async function findAsync(xs, pred) {
-  for (const x of xs) {
-    if (await pred(x)) return x;
-  }
-  return undefined;
+// `xs` without repeats, in their order.
+function distinct(xs) {
+  return [...new Set(xs)];
 }
 
 // The results of the async `f` on `xs`, one after the other, up to and
@@ -49,6 +45,6 @@ module.exports = {
   replaceAt,
   firstDefined,
   reduceAsync,
-  findAsync,
+  distinct,
   mapUntilAsync,
 };

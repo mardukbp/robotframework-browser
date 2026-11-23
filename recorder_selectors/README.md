@@ -75,8 +75,9 @@ scripts, so a page listener at `window` in the capture phase could relabel unnot
 ```
 RecorderSelectors/
   __init__.py          the plugin: loads js/index.js, registers the scope engine
-  js/index.js          the JS extension: select labels, then the rules, in order
+  js/index.js          the JS extension: select labels, the rules in order, then id_engine
   js/rules/*.js        one rule per file
+  js/id_engine.js      writes CSS ids with the id engine
   js/conditions.js     the named conditions the rules state in their `when`
   js/selector.js       selectors as data: parse, print, read and build parts (pure)
   js/run_rules.js      runs the rules on an Action and checks what they try in the page
@@ -84,7 +85,7 @@ RecorderSelectors/
   js/page_scripts.js   installs the scripts that run in the page, keeps what they report
   js/scope.js          the scope selector engine
   js/select_labels.js  records a select by the labels of the chosen options
-  js/fp.js             a few Clojure-like helpers: replaceAt, firstDefined, reduceAsync, ...
+  js/fp.js             a few Clojure-like helpers: replaceAt, distinct, firstDefined, ...
 tests/                 unit tests, for node --test
 atest/                 acceptance tests, for robot, with their page and its server
 ```
@@ -131,13 +132,14 @@ nothing any more, because the click navigated or removed the element, the descri
 the check come from a snapshot taken when the element was pressed; only selectors of the
 form `role=...` or `role=... >> scope=...` can be checked that way.
 
-A rule that rewrites each part where it is, like `id_engine` and `number_widening`, gives
-`forEachPart` instead: `{ when: [conditions on a part], tryInOrder: ({ part, element }) =>
-[part, ...] }`, where `element` describes the element the selector up to that part finds.
+A rule that changes only the part the element is found by uses `withTarget(recorded, part)`
+of `js/selector.js`, as `number_widening` and `exact_names` do. A rewrite that needs no check
+in the page, such as `js/id_engine.js`, is a plain step of the pipeline in `js/index.js`, a
+function from Action to Action, like `js/select_labels.js`.
 
-Rules only compute with data, so they can be tested without a page: `selectorsToTry` and
-`replacementsToTry` of `run_rules.js` give what a rule tries for a recorded selector and a
-description of an element.
+Rules only compute with data, so they can be tested without a page: `selectorsToTry` of
+`run_rules.js` gives what a rule tries for a recorded selector and a description of an
+element.
 
 Add the rule to the list in `js/index.js`. Functions that run in the page must use nothing
 from outside their own body, since Playwright sends them there as source text; `page.js`
