@@ -6,8 +6,8 @@
 //                  attrs: [{ key, value, flag, quoted }] }
 //   text, label  { engine, prefix: "internal:text=" | "text=" | ..., value, flag }
 //   scope        { engine, text }
-//   hasText      { engine, raw, tag, value }: CSS such as `label:has-text("Ja")`,
-//                printed as it was
+//   hasText      { engine, raw, tag?, value }: CSS such as `label:has-text("Ja")`,
+//                or `internal:has-text="Ja"i`, printed as it was
 //   id, nth, other  { engine, raw }: printed as they were
 //
 // A `flag` is `s` for an exact match, `i` for a case-insensitive part, or "".
@@ -25,6 +25,7 @@ const ATTRIBUTE = /\[([a-z-]+)(?:=(?:("(?:[^"\\]|\\.)*")([is]?)|([^\]"]*)))?\]/g
 const TEXT = /^(internal:(text|label)=)("(?:[^"\\]|\\.)*")([is]?)$/;
 const NTH = /^nth=-?\d+$/;
 const HAS_TEXT = /^(?:css=)?([a-z][a-z0-9-]*):has-text\(("(?:[^"\\]|\\.)*")\)$/;
+const INTERNAL_HAS_TEXT = /^internal:has-text=("(?:[^"\\]|\\.)*")([is]?)$/;
 const ID = /^(css=)?\s*(#|\[id[=~|^$*]?=)|^internal:attr=\[id=|^id=/;
 
 // ------------------------------------------------------------------ parse
@@ -112,11 +113,15 @@ function parseId(raw) {
   return { engine: "id", raw };
 }
 
+// CSS with `:has-text()`, or Playwright's own form of it, which filters the
+// part before: `label >> internal:has-text="Ja"i`. Browser's recorder writes
+// the second as the first.
 function parseHasText(raw) {
-  const match = HAS_TEXT.exec(raw);
-  if (!match) return undefined;
-  const [, tag, quoted] = match;
-  return { engine: "hasText", raw, tag, value: JSON.parse(quoted) };
+  const css = HAS_TEXT.exec(raw);
+  if (css) return { engine: "hasText", raw, tag: css[1], value: JSON.parse(css[2]) };
+  const internal = INTERNAL_HAS_TEXT.exec(raw);
+  if (internal) return { engine: "hasText", raw, value: JSON.parse(internal[1]) };
+  return undefined;
 }
 
 function parseNth(raw) {

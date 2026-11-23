@@ -183,12 +183,17 @@ describe("rules", () => {
       value: "Ja",
     });
     assert.equal(print(parse('label:has-text("Ja")').parts), 'label:has-text("Ja")');
+    const internal = 'label >> internal:has-text="Ja"i';
+    assert.equal(print(parse(internal).parts), internal);
+    assert.equal(parse(internal).target.engine, "hasText");
     assert.equal(hasText.skip(parse("css=label")), true);
     const facts = { text: "Ja", scopeText: "Kontoinhaber?*" };
-    assert.deepEqual(candidates(hasText, 'label:has-text("Ja")', facts), [
-      'text="Ja"',
-      'text="Ja" >> scope="Kontoinhaber?*"',
-    ]);
+    for (const recorded of ['label:has-text("Ja")', internal]) {
+      assert.deepEqual(candidates(hasText, recorded, facts), [
+        'text="Ja"',
+        'text="Ja" >> scope="Kontoinhaber?*"',
+      ]);
+    }
   });
 
   it("title_description records a clicked element by its title", () => {

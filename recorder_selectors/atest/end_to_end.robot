@@ -38,6 +38,19 @@ A Choice In A Select Is Recorded By The Label Of The Option
     ${keyword} =    Stop Recording    ${promise}    1
     Should Contain    ${keyword}    ${SPACE*4}label${SPACE*4}AMELUNG\n
 
+A Click On The Label Of An Option Is Recorded By Its Text, Scoped By Its Question
+    Add Elements
+    ...    <div><label>Ist der Antragsteller auch der Kontoinhaber?*</label>
+    ...    <div><input type="radio" name="konto" id="konto-ja"><label for="konto-ja">Ja</label></div>
+    ...    <div><input type="radio" name="konto" id="konto-nein"><label for="konto-nein">Nein</label></div></div>
+    ...    <div><p>Wirklich?</p><button>Ja</button></div>
+    ${promise} =    Start Recording    Answer Ja
+    Click    css=label[for="konto-ja"]
+    ${keyword} =    Stop Recording    ${promise}    2
+    Should Contain
+    ...    ${keyword}
+    ...    Click${SPACE*4}text="Ja" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"\n
+
 
 *** Keywords ***
 Open Page To Record

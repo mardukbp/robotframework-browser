@@ -1,8 +1,9 @@
-// An element Playwright records by CSS with `:has-text()`, which matches every
-// such element that contains the text anywhere, is recorded by its own whole
-// text, scoped by the text before it when the text alone is not unique:
+// An element Playwright records by a has-text filter, which matches every such
+// element that contains the text anywhere, is recorded by its own whole text,
+// scoped by the text before it when the text alone is not unique:
 //
-//   label:has-text("Ja")   becomes   text="Ja"                     when unique,
+//   label >> internal:has-text="Ja"i, written label:has-text("Ja"),   becomes
+//   text="Ja"                                                       when unique,
 //   text="Ja" >> scope="Ist der Antragsteller auch der Kontoinhaber?*"   else.
 
 const { text, scope } = require("../selector.js");
