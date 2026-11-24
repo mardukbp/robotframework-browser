@@ -62,6 +62,15 @@ describe('runRecordedActionHooks', () => {
         expect(deep).toEqual({ name: 'select', selector: '#s', options: ['1'] });
     });
 
+    it('lets a select give its options as label descriptors', async () => {
+        const options = [{ label: 'AMELUNG' }, { label: 'AUDI' }];
+        const select = { name: 'select', selector: '#s', options: ['14: 6792'] };
+        const recorded = await runRecordedActionHooks(select, page, context, [
+            { __recordedAction: ({ action }: any) => ({ ...action, options }) },
+        ]);
+        expect(recorded).toEqual({ ...select, options });
+    });
+
     it('keeps the Action when the hooks take too long', async () => {
         const slow = { __recordedAction: () => new Promise(() => undefined) };
         expect(await runRecordedActionHooks(click, page, context, [slow], 10)).toBe(click);
@@ -87,8 +96,10 @@ describe('runRecordedActionHooks', () => {
         ['an Action of a class', () => new (class Click {})(), 'returned object, not an Action'],
         ['an Action without a name', () => ({ selector: '#b' }), 'without a name'],
         ['an empty selector', () => ({ ...click, selector: ' ' }), 'empty or non-string selector'],
-        ['options that are numbers', () => ({ ...click, options: [1] }), 'options that are not all values'],
-        ['a label descriptor', () => ({ ...click, options: [{ label: 'A' }] }), 'not all values'],
+        ['options that are numbers', () => ({ ...click, options: [1] }), 'neither all values nor all { label }'],
+        ['a value descriptor', () => ({ ...click, options: [{ value: '1' }] }), 'neither all values'],
+        ['descriptors with two keys', () => ({ ...click, options: [{ label: 'A', value: '1' }] }), 'neither all'],
+        ['values mixed with descriptors', () => ({ ...click, options: ['1', { label: 'A' }] }), 'neither all'],
     ])('logs and ignores %s', async (_why, hook, message) => {
         expect(await record({ __recordedAction: hook })).toBe(click);
         expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(message));

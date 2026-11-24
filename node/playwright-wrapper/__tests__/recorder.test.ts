@@ -172,7 +172,7 @@ describe('ensureRecorder', () => {
                     seen.push(args);
                     if (args.action.name === 'click')
                         return { ...args.action, selector: 'role=button[description="Save"s]' };
-                    if (args.action.name === 'select') return { ...args.action, options: ['2'] };
+                    if (args.action.name === 'select') return { ...args.action, options: [{ label: 'One' }] };
                     return undefined;
                 },
             },
@@ -183,7 +183,7 @@ describe('ensureRecorder', () => {
         await Promise.all(state.pendingHooks!);
         expect(eventsIn(state.entries).map((e) => e.action)).toEqual([
             { name: 'click', selector: 'role=button[description="Save"s]' },
-            { name: 'select', selector: '#s', options: ['2'] },
+            { name: 'select', selector: '#s', options: [{ label: 'One' }] },
             { name: 'navigate', url: 'http://x' },
         ]);
         expect(seen).toHaveLength(3);

@@ -212,6 +212,15 @@ def test_map_select():
     assert rendered(action) == "Select Options By    css=select    value    1    2"
 
 
+def test_map_select_by_the_labels_a_hook_gave():
+    action = {
+        "name": "select",
+        "selector": "css=select",
+        "options": [{"label": "A"}, {"label": "B"}],
+    }
+    assert rendered(action) == "Select Options By    css=select    label    A    B"
+
+
 def test_map_assert_text_substring():
     action = {
         "name": "assertText",

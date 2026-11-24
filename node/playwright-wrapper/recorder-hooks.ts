@@ -156,7 +156,7 @@ export function whyNotRecordable(returned: unknown, isPick: boolean): string | u
     }
     if (isPick && !isNonEmptyString(returned.selector)) return 'returned a pick without a selector';
     if ('options' in returned && !areOptions(returned.options)) {
-        return 'returned options that are not all values';
+        return 'returned options that are neither all values nor all { label } descriptors';
     }
     return undefined;
 }
@@ -172,7 +172,16 @@ function isNonEmptyString(value: unknown): boolean {
     return typeof value === 'string' && value.trim() !== '';
 }
 
-// The options of a `select` Action: the values Playwright records.
+// The options of a `select` Action: the values Playwright records, or the
+// labels as Playwright's option descriptors, `{ label: 'AMELUNG' }`.
 function areOptions(value: unknown): boolean {
-    return Array.isArray(value) && value.every((option) => typeof option === 'string');
+    if (!Array.isArray(value)) return false;
+    if (value.every((option) => typeof option === 'string')) return true;
+    return value.length > 0 && value.every(isLabelDescriptor);
+}
+
+function isLabelDescriptor(option: unknown): boolean {
+    if (!isPlainObject(option)) return false;
+    const keys = Object.keys(option);
+    return keys.length === 1 && keys[0] === 'label' && typeof option.label === 'string';
 }

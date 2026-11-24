@@ -57,7 +57,7 @@ operators, option strategies) never are.
 | `press` | `Press Keys    <selector>    [Modifier+...]Key` | selector, keys |
 | `check` | `Check Checkbox    <selector>` | selector |
 | `uncheck` | `Uncheck Checkbox    <selector>` | selector |
-| `select` | `Select Options By    <selector>    value    <option>...` | selector, each option |
+| `select` | `Select Options By    <selector>    value    <option>...`, or `label` when a JS extension gave label descriptors (see Extension hooks) | selector, each option |
 | `navigate` | `Go To    <url>` (never `New Page`: a recorded keyword does not create its page) | url |
 | `closePage` | nothing: Playwright drops it, because its page is gone; the wrapper reports a closed page as a `closed` event instead (see Pages) | - |
 | `openPage` | nothing, silently (existing pages, hand-opened tabs; a page opened by an Action arrives as a `popup` signal) | - |
@@ -167,12 +167,13 @@ in `Record Keyword`. `node/playwright-wrapper/recorder-hooks.ts`:
 - The hooks work on data: `__recordedAction({action, page, context})` gets a
   `structuredClone` of the Action and returns the Action to record, or `undefined`; the
   hooks chain in load order. The contract is narrow on purpose: an extension may change
-  `selector`, and the `options` of a `select` Action, as values. Every other key is
-  Playwright's recorder data, passed through and not promised, so a Playwright upgrade that
-  changes it breaks no
+  `selector`, and the `options` of a `select` Action, as values or as labels in
+  Playwright's option descriptors (`{label}`). Every other key is Playwright's recorder
+  data, passed through and not promised, so a Playwright upgrade that changes it breaks no
   documented API.
 - The selector is still Playwright's before `to_browser_selector`, so a changed one is
-  translated like any other (a public selector passes through).
+  translated like any other (a public selector passes through). `_map_select` selects label
+  descriptors by `label`; plain values stay `value`.
 - `whyNotRecordable` checks only what Browser reads (`name`, `selector`, `options`) and that
   the result is a plain object. A throw, a rejection or an invalid result keeps the Action
   from before that hook and is logged. An Action that is not JSON is dropped by the

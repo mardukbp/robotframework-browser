@@ -247,8 +247,10 @@ class Recorder(LibraryComponent):
           ``{name: "pick", selector}``. ``action`` is a copy; ``page`` and ``context``
           are the Playwright objects it happened in. Return the Action to record, or
           ``undefined`` to keep it. An extension may change ``selector``, in Browser's
-          or Playwright's syntax, and the ``options`` of a ``select`` Action, a list of
-          option values. Other keys are Playwright's and may change with it. The hooks of several extensions run
+          or Playwright's syntax, and the ``options`` of a ``select`` Action, either as
+          values or as labels in Playwright's option descriptors, ``{label: "AMELUNG"}``,
+          which `Select Options By` then selects by ``label``. Other keys
+          are Playwright's and may change with it. The hooks of several extensions run
           in load order, each on the Action the one before gave; they may be ``async``.
           When they take longer than 2 seconds, fail, or return something that cannot
           be recorded, the Action is recorded as Playwright reported it, and the reason

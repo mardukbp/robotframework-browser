@@ -13,7 +13,7 @@ Test Teardown     Run Keywords    End Any Recording Session    AND    Close Page
 Test Tags         recorder
 
 *** Test Cases ***
-A Hook Changes The Selector Of A Recorded Action
+A Hook Records A Select By Its Labels
     ${promise} =    Promise To    Record Keyword    Choose A Make    ${RESOURCE}
     Toolbar State Should Be    recording
     Select Options By    id=ManyOptions    value    13: 6792
@@ -21,7 +21,7 @@ A Hook Changes The Selector Of A Recorded Action
     Send Command    {cmd: 'stop'}
     Wait For    ${promise}
     ${file} =    Get File    ${RESOURCE}
-    Should Contain    ${file}    >> nth=0${SPACE*4}value${SPACE*4}13: 6792\n
+    Should Contain    ${file}    ${SPACE*4}label${SPACE*4}AMELUNG\n
     Select Options By    id=ManyOptions    value    0: null
     Recorded Keyword Replays    ${RESOURCE}    Choose A Make
     Get Selected Options    id=ManyOptions    value    ==    13: 6792
