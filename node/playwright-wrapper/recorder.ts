@@ -32,6 +32,7 @@ import { drivePick, endPick, Pick, PickRequest, resetPlaywrightCursor } from './
 import * as pb from './generated/playwright';
 import { isGone } from './page-crash';
 import { PlaywrightState } from './playwright-state';
+import { JsExtension, RECORDED_ACTION_HOOK, runRecordedActionHooks, runRecordingStartedHooks } from './recorder-hooks';
 import { emptyWithLog, jsonResponse } from './response-util';
 
 const RECORDER = Symbol.for('robotframework-browser.recorder.state');
@@ -84,6 +85,12 @@ export interface RecorderBuffers {
     // The page the user works on: where the last toolbar command came from, or
     // the page pressed last when Playwright's Pick locator was pressed. A pick starts there.
     userPage?: Page;
+    // The JS extensions loaded at the last poll, whose `__recordedAction` hooks
+    // may change every Action and pick (recorder-hooks.ts).
+    extensions?: JsExtension[];
+    // The hook runs on buffered Actions that have not finished yet
+    // (`runHooksOnBufferedAction`); a poll waits for them.
+    pendingHooks?: Set<Promise<void>>;
 }
 
 export function toAction(payload: unknown): Action | null {
@@ -148,6 +155,34 @@ function clearEntries(buffers: RecorderBuffers): void {
 
 export function newBuffers(): RecorderBuffers {
     return { entries: [], commandCount: 0, armed: false, active: false, rendered: new WeakMap(), ownPick: false };
+}
+
+// Runs the `__recordedAction` hooks on an Action the sink buffered, and
+// replaces it there with the Action they give. The Action keeps its place while
+// the hooks run, so a toolbar command made meanwhile (Undo) never overtakes it.
+export function runHooksOnBufferedAction(
+    buffers: RecorderBuffers,
+    entry: EventEntry | undefined,
+    page: unknown,
+    context: BrowserContext,
+): void {
+    if (!entry || !buffers.extensions?.length) return;
+    const reported = entry.action as Action;
+    const replaceInBuffer = (recorded: Action) => {
+        if (recorded === reported) return;
+        if (jsonLength({ ...entry, action: recorded }) > MAX_EVENT_BYTES) {
+            logger.info(
+                `recorder: ${RECORDED_ACTION_HOOK} returned an oversized Action, the '${reported.name}' Action is kept`,
+            );
+            return;
+        }
+        entry.action = recorded;
+    };
+    const pending = (buffers.pendingHooks ??= new Set());
+    const hooks: Promise<void> = runRecordedActionHooks(reported, page as Page, context, buffers.extensions)
+        .then(replaceInBuffer)
+        .finally(() => pending.delete(hooks));
+    pending.add(hooks);
 }
 
 export function acceptCommand(buffers: RecorderBuffers, command: unknown, page?: Page): void {
@@ -277,11 +312,12 @@ async function createRecorder(context: BrowserContext): Promise<RecorderBuffers>
             return;
         }
         buffers.entries.push(entry);
+        return entry;
     };
     const forward = (event: 'added' | 'updated') => (page: unknown, payload: unknown) => {
         logRaw(context, event, page, payload);
         const action = toAction(payload);
-        if (action) buffer({ event, action, page: pageGuid(page) });
+        if (action) runHooksOnBufferedAction(buffers, buffer({ event, action, page: pageGuid(page) }), page, context);
     };
     // Playwright reports no `closePage`: it drops an Action whose page is gone.
     const watchClose = (page: Page) => {
@@ -442,7 +478,7 @@ async function pickInRecording(
     }
     if (!buffers.pick) {
         if (!userPage) return { picked: { error: 'No page is open to pick in.' } };
-        buffers.pick = { page: userPage, picking: false };
+        buffers.pick = { page: userPage, picking: false, extensions: buffers.extensions };
     }
     if (starting) buffers.ownPick = true;
     return drivePick(buffers.pick, request);
@@ -470,7 +506,9 @@ export async function recorderPoll(request: pb.Request_Json, state: PlaywrightSt
         throw new Error('A Record Keyword(s) or Record Selector session is already running in this browser context.');
     }
     const buffers = await ensureRecorder(context);
+    buffers.extensions = state.extensions ?? [];
     if (reset) {
+        await runRecordingStartedHooks(context, buffers.extensions);
         rememberContext(state, context);
         await resetSession(context, buffers);
     }
@@ -504,6 +542,8 @@ export async function recorderPoll(request: pb.Request_Json, state: PlaywrightSt
         await writeMode(context, 'recording');
     }
     const stopped = !buffers.ownPick && buffers.armed && mode !== undefined && STOP_MODES.has(mode);
+    // Each pending hook run ends within HOOKS_TIMEOUT_MS.
+    if (buffers.pendingHooks) await Promise.all(buffers.pendingHooks);
     return jsonResponse(
         JSON.stringify({
             mode: stopped ? 'stopped' : 'recording',
