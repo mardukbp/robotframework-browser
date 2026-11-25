@@ -18,7 +18,14 @@ a choice in a select, is recorded as Playwright reports it.
 ## Rules
 
 Every recorded or picked selector passes these rules, in this order, each on the result of
-the one before:
+the one before. To run only some of them, name them after the plugin, each after a `;`;
+they still run in this order, whatever order they are named in:
+
+```robotframework
+Library    Browser    plugins=RecorderSelectors;aria_label;exact_names;id_engine
+```
+
+A rule the plugin does not have fails the import, and the message lists its rules.
 
 | Rule | Playwright records | The plugin records |
 | --- | --- | --- |
@@ -131,13 +138,14 @@ Rules only compute with data, so they can be tested without a page: `selectorsTo
 `run_rules.js` gives what a rule tries for a recorded selector and a description of an
 element.
 
-Add the rule to the list in `js/hook.js`. Everything `js/hook.js` requires runs in the page:
-`js/bundle.js` puts those modules into the one function Browser runs there: the extension
-exports `__rewriteAction` as the source of an expression that evaluates to that function,
-which `Record Keyword` accepts as "a string with the source of one". The bundle follows only
-relative `require`s, in either quote style; any other `require` fails in the page with its
-name, so the modules must not require Node modules, and the hook must give its result at
-once.
+Add the rule to `STEPS` in `js/hook.js`, at the place in the order where it makes sense;
+its `name` is how users choose it. Everything `js/hook.js` requires runs in the page: Browser
+runs the source of the hook there, and the hook must be a function with a name of its own.
+So `js/index.js` puts the bundle of `js/hook.js` (`js/bundle.js`) into the body of a function
+named `recorderSelectors`, with the rules chosen, and the log names the hook by it. The
+bundle follows only relative `require`s, in either quote style; any other `require` fails in
+the page with its name, so the modules must not require Node modules, and the hook must give
+its result at once.
 
 ## Limits
 

@@ -87,12 +87,8 @@ describe("selectorStep", () => {
 });
 
 describe("the extension", () => {
-  it("has the page hook as its only recorder hook", () => {
-    const hooks = Object.keys(extension).filter((name) => name.startsWith("__") && name !== "__registerScopeEngine");
-    assert.deepEqual(hooks, ["__rewriteAction"]);
-  });
-
-  it("gives Browser the page hook as one function expression, without require", () => {
+  it("gives Browser the page hook as a function named recorderSelectors whose source the page runs, without require", () => {
+    assert.equal(extension.__rewriteAction.name, "recorderSelectors");
     const hook = vm.runInNewContext(`(${extension.__rewriteAction})`, {});
     assert.equal(typeof hook, "function");
   });
@@ -124,6 +120,31 @@ describe("the extension", () => {
     const changes = hook({ action, element: button, query: () => [button], log: (m) => logged.push(m) });
     assert.equal(JSON.stringify(changes), JSON.stringify({ selector: "id=APD_::Note" }));
     assert.deepEqual(logged, []);
+  });
+});
+
+describe("choosing the rules", () => {
+  const { RULE_NAMES, rewriteActionWith } = require("../RecorderSelectors/js/hook.js");
+  const ids = { name: "click", selector: "#a\\:b" };
+
+  it("runs only the rules named, in the plugin's order whatever order they are named in", () => {
+    const logged = [];
+    const hook = rewriteActionWith(["id_engine"]);
+    assert.deepEqual(hook({ action: ids, element, query, log: (m) => logged.push(m) }), { selector: "id=a:b" });
+    assert.equal(rewriteActionWith(["exact_names"])({ action: ids, element, query, log: () => undefined }), undefined);
+    assert.deepEqual(RULE_NAMES.slice(-2), ["exact_names", "id_engine"]);
+  });
+
+  it("gives Browser a hook with only the rules named, and refuses a rule it does not have", () => {
+    try {
+      extension.__useRules(["exact_names"]);
+      const hook = vm.runInNewContext(`(${extension.__rewriteAction})`, {});
+      assert.equal(extension.__rewriteAction.name, "recorderSelectors");
+      assert.equal(hook({ action: ids, element, query, log: () => undefined }), undefined);
+      assert.throws(() => extension.__useRules(["no_such_rule"]), /has no rule no_such_rule; its rules are/);
+    } finally {
+      extension.__useRules(RULE_NAMES);
+    }
   });
 });
 

@@ -5,8 +5,11 @@
 const { pipeline, selectorStep } = require("./run_rules.js");
 const idEngine = require("./id_engine.js");
 
-// The selector rules, in order, each on the selector the one before returned.
-const SELECTOR_RULES = [
+// Every step, in the order that makes sense, each on the selector the one before
+// returned: the rules that choose what the element is found by, then
+// exact_names, which makes the name they chose exact, and last the id engine,
+// for the CSS ids left.
+const STEPS = [
   require("./rules/number_widening.js"),
   require("./rules/has_text.js"),
   require("./rules/title_description.js"),
@@ -14,14 +17,20 @@ const SELECTOR_RULES = [
   require("./rules/label_scope.js"),
   require("./rules/caption_scope.js"),
   require("./rules/exact_names.js"),
-];
+]
+  .map(selectorStep)
+  .concat(idEngine.step);
 
-// The selector rules run first; last, the CSS ids left are written with the
-// id engine.
-const rewriteSelector = pipeline([...SELECTOR_RULES.map(selectorStep), idEngine.step]);
+const RULE_NAMES = STEPS.map((step) => step.name);
 
-module.exports.rewriteAction = ({ action, element, query, log }) => {
-  const selector = rewriteSelector({ name: action.name, selector: action.selector, element, query, log });
-  if (selector === undefined) return undefined;
-  return { selector };
-};
+// Browser's hook running the steps named in `ruleNames`, in the order of STEPS.
+function rewriteActionWith(ruleNames) {
+  const rewriteSelector = pipeline(STEPS.filter((step) => ruleNames.includes(step.name)));
+  return ({ action, element, query, log }) => {
+    const selector = rewriteSelector({ name: action.name, selector: action.selector, element, query, log });
+    if (selector === undefined) return undefined;
+    return { selector };
+  };
+}
+
+module.exports = { RULE_NAMES, rewriteActionWith };

@@ -18,7 +18,13 @@ class RecorderSelectors(LibraryComponent):
     Import it with the ``plugins`` argument of Browser:
     | Library    Browser    plugins=RecorderSelectors
 
-    Every recorded or picked selector passes these rules, in this order:
+    Only some of its rules run when they are named after the plugin, each after
+    a ``;``. They still run in the order below, whatever order they are named in:
+    | Library    Browser    plugins=RecorderSelectors;aria_label;exact_names;id_engine
+
+    The rules are ``number_widening``, ``has_text``, ``title_description``,
+    ``aria_label``, ``label_scope``, ``caption_scope``, ``exact_names`` and
+    ``id_engine``. Every recorded or picked selector passes them in this order:
 
     - A number Playwright drops at the start or end of a text is given back:
       ``text="km/h bis 60 km/h"`` becomes ``text="46 km/h bis 60 km/h"``.
@@ -60,19 +66,21 @@ class RecorderSelectors(LibraryComponent):
     an element with the same tag, role and name.
     """
 
-    def __init__(self, library: Browser):
+    def __init__(self, library: Browser, *rules: str):
         super().__init__(library)
         self.initialize_js_extension(JS_EXTENSION)
-        self._register_scope_engine()
+        self._call_extension("__registerScopeEngine")
+        if rules:
+            self._call_extension("__useRules", ruleNames=list(rules))
 
-    def _register_scope_engine(self):
+    def _call_extension(self, name: str, **arguments: object):
         # Not call_js_keyword: it reads the library timeout, which Browser sets
         # only after it has created its plugins.
         with self.playwright.grpc_channel() as stub:
             for _ in stub.CallExtensionKeyword(
                 Request().KeywordCall(
-                    name="__registerScopeEngine",
-                    arguments=json.dumps({"arguments": []}),
+                    name=name,
+                    arguments=json.dumps({"arguments": list(arguments.items())}),
                 )
             ):
                 pass
