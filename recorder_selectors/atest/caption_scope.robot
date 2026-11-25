@@ -32,7 +32,7 @@ A Link After Other Links Is Scoped By The Category Title, Not By Their Text
     ...    internal:role=link[name="Testautomatisierung mit Robot Framework - Webinar"s] >> scope="Robot Framework"
     Get Attribute    ${selector}    href    ==    \#webinar
 
-A Link That Navigates Away Is Scoped By The Category Title Seen At The Click
+A Link That Navigates Away Is Scoped By The Category Title Seen Before The Click
     Evaluate JavaScript
     ...    css=[id="#category--12-content"] >> text=Certified Professional
     ...    (a) => a.setAttribute('href', '?rfcp')

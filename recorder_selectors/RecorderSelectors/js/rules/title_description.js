@@ -23,7 +23,7 @@ const {
 module.exports = {
   name: "title_description",
   when: {
-    action: [isClick],
+    name: [isClick],
     recorded: [foundByRoleAndName],
     element: [hasRole, hasTitle, not(hasDescriptionOfItsOwn)],
   },

@@ -26,7 +26,7 @@ A Click On The Label Of A Radio Is Recorded By Its Exact Text
 
 A Link That Navigates Away Is Recorded By Its Exact Name Without Its Title
     [Documentation]    Playwright tells the link from the other one by the description its
-    ...    title gives it; the exact name is enough, checked against the snapshot of the press.
+    ...    title gives it; the exact name is enough, checked before the click.
     Add Akademie Links
     ${selector} =    Recorded Click
     ...    css=a[href="?akademie"]
@@ -39,7 +39,7 @@ A Link That Navigates Away Is Recorded By Its Exact Name Without Its Title
 
 A Link Whose Click Brings More Such Links Is Recorded By Its Exact Name
     [Documentation]    After the click the recorded role=link[name*="Akademie"i] finds two
-    ...    links; the exact name is checked against the snapshot of the press.
+    ...    links; the exact name is checked before the click.
     Add Elements    <nav id="menu"><a href="\#akademie">Akademie</a></nav>
     Evaluate JavaScript
     ...    id=menu

@@ -2,7 +2,7 @@
 // As in Clara Rules, a rule tests facts of three kinds, and each condition
 // takes the one it is about:
 //
-//   action    the Action Playwright recorded: `{ name, selector, ... }`
+//   name      the name of the Action Playwright recorded, such as "click"
 //   recorded  the selector it recorded, as data (see `parse` in selector.js)
 //   element   what the page tells about the recorded element (see page.js)
 
@@ -14,10 +14,10 @@ function not(condition) {
   return (fact) => !condition(fact);
 }
 
-// ---------------------------------------------------------------- action
+// ----------------------------------------------------------- Action name
 
-function isClick(action) {
-  return action.name === "click";
+function isClick(name) {
+  return name === "click";
 }
 
 // ------------------------------------------------------- recorded selector

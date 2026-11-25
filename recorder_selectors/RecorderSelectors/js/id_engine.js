@@ -1,21 +1,19 @@
-// Each part that finds its element by a CSS id alone, a frame's part too, is
-// written with Browser's `id` engine, which needs no CSS escapes:
+// Each part that finds its element by a CSS id alone is written with
+// Playwright's `id` engine, which needs no CSS escapes:
 //
-//   #oevd-iframe                          becomes   id=oevd-iframe
 //   #APD_\:\:SalesOrderType-inner-vhi     becomes   id=APD_::SalesOrderType-inner-vhi
 //
-// `#x` and `id=x` find the same elements, so this needs no check in the page.
+// It runs in the page, on the selector inside the element's frame: the parts
+// of the frames before it stay as Playwright recorded them.
 
 const { parse, print } = require("./selector.js");
 
-// The Action with its selector's CSS ids written with the `id` engine, or
-// undefined to keep it.
-function run({ action }) {
-  if (!action.selector) return undefined;
-  const parts = parse(action.selector).parts;
+// `selector` with its CSS ids written with the `id` engine, or undefined to keep it.
+function run({ selector }) {
+  const parts = parse(selector).parts;
   const rewritten = parts.map(withIdEngine);
   if (rewritten.every((part, i) => part === parts[i])) return undefined;
-  return { ...action, selector: print(rewritten) };
+  return print(rewritten);
 }
 
 // `part` with the `id` engine when it is a CSS id that engine can write: one

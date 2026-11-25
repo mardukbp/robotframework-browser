@@ -1,10 +1,9 @@
 *** Settings ***
-Documentation       The plugin in a real recording: Browser's recorder gives it the Actions
-...                 Playwright reports and writes the keyword from what the plugin gives
-...                 back. HookProbe.py, loaded after the plugin, sees those Actions; the session
-...                 ends after a short idle timeout. The recorder needs a visible browser.
+Documentation       The plugin in a real recording: Browser runs its hook in the page on
+...                 each Action as it happens and writes the keyword from what the hook
+...                 gives back. The recorder needs a visible browser.
 
-Library             Browser    plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py
+Library             Browser    plugins=${CURDIR}/../RecorderSelectors
 
 Suite Setup         New Browser    chromium    headless=False
 Suite Teardown      Close Browser    ALL
@@ -29,14 +28,14 @@ Every Click Of A Recording Is Rewritten On Its Own
     Should Contain    ${keyword}    Click${SPACE*4}role=button[name="Open menu"s]\n
     Should Contain    ${keyword}    Click${SPACE*4}role=button[description="Help"s]\n
 
-A Choice In A Select Is Recorded By The Label Of The Option
+A Choice In A Select Keeps The Value Playwright Recorded
     Add Elements
     ...    <label>Make <select id="make"><option value="0: null"></option>
     ...    <option value="14: 6792">AMELUNG</option><option value="15: 0588">AUDI</option></select></label>
     ${promise} =    Start Recording    Choose A Make
     Select Options By    id=make    value    14: 6792
     ${keyword} =    Stop Recording    ${promise}    1
-    Should Contain    ${keyword}    ${SPACE*4}label${SPACE*4}AMELUNG\n
+    Should Contain    ${keyword}    ${SPACE*4}value${SPACE*4}14: 6792\n
 
 A Click On The Label Of An Option Is Recorded By Its Text, Scoped By Its Question
     Add Elements
@@ -56,12 +55,11 @@ A Click On The Label Of An Option Is Recorded By Its Text, Scoped By Its Questio
 Open Page To Record
     [Documentation]    The elements go to the bottom right, away from the recorder's toolbar
     ...    and Playwright's overlay at the top.
-    Forget Actions Seen
     New Context
     New Page    ${PAGE_URL}
     Evaluate JavaScript
     ...    ${None}
-    ...    () => { document.body.insertAdjacentHTML('beforeend', '<div id="box" style="position:fixed;right:20px;bottom:20px"><button id="probe">Probe</button></div>'); }
+    ...    () => { document.body.insertAdjacentHTML('beforeend', '<div id="box" style="position:fixed;right:20px;bottom:20px"></div>'); }
 
 Add Elements
     [Arguments]    @{html}
@@ -73,28 +71,18 @@ Add Elements
 
 Start Recording
     [Documentation]    Starts Record Keyword ``${name}`` and returns its promise once the
-    ...    recorder records: until then, the probe button is clicked again.
+    ...    toolbar shows that the recorder records.
     [Arguments]    ${name}
-    ${promise} =    Promise To    Record Keyword    ${name}    ${None}    idle_timeout=2s
-    Wait Until Keyword Succeeds    20s    0.5s    The Probe Is Recorded
+    ${promise} =    Promise To    Record Keyword    ${name}    ${None}
+    Wait For Function
+    ...    () => window.__rfbToolbarState && window.__rfbToolbarState.state === 'recording' && !window.__rfbToolbarState.pending
     RETURN    ${promise}
 
-The Probe Is Recorded
-    Click    id=probe
-    ${seen} =    Actions Seen
-    Should Not Be Empty    ${seen}
-
 Stop Recording
-    [Documentation]    Returns the recorded keyword once the session ended, two seconds after
-    ...    the last Action, and checks that the plugin gave ``${count}`` Actions besides the
-    ...    probe's.
+    [Documentation]    Returns the recorded keyword once the toolbar shows ``${count}``
+    ...    keyword calls, stopping the session through the toolbar's command channel.
     [Arguments]    ${promise}    ${count}
+    Wait For Function    () => window.__rfbToolbarState.calls.length === ${count}
+    Evaluate JavaScript    ${None}    () => window.__rfbCommand({cmd: 'stop'})
     ${keyword} =    Wait For    ${promise}
-    Actions Besides The Probe Should Be    ${count}
     RETURN    ${keyword}
-
-Actions Besides The Probe Should Be
-    [Arguments]    ${count}
-    ${seen} =    Actions Seen
-    ${actions} =    Evaluate    [a for a in $seen if 'Probe' not in a.get('selector', '')]
-    Length Should Be    ${actions}    ${count}

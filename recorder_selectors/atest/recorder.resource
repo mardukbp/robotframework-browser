@@ -1,13 +1,13 @@
 *** Settings ***
 Documentation       Keywords of the RecorderSelectors suites. A test gives the plugin the Action
-...                 Playwright reports, through HookProbe.py, and checks the Action the plugin
-...                 records: what Browser's recorder does with it is Browser's to test.
+...                 Playwright reports, through HookProbe.py, and checks the selector the plugin
+...                 records: what Browser's recorder does with it is Browser's to test. The
+...                 plugin's hook runs before the Action happens, as in a recording.
 
 
 *** Keywords ***
 Open Test Page
     New Page    ${PAGE_URL}
-    Start Recording Hooks
 
 Add Elements
     [Arguments]    @{html}
@@ -18,17 +18,17 @@ Add Elements
     ...    arg=${elements}
 
 Recorded Click
-    [Documentation]    Clicks ``${target}`` and returns the selector the plugin records for
-    ...    the click Playwright reports on ``${reported}``.
+    [Documentation]    Returns the selector the plugin records for the click Playwright
+    ...    reports on ``${reported}``, and clicks ``${target}``.
     [Arguments]    ${target}    ${reported}
-    Click    ${target}
     ${selector} =    Recorded Selector    click    ${reported}
+    Click    ${target}
     RETURN    ${selector}
 
 Recorded Select
-    [Documentation]    Selects ``${value}`` in ``${target}`` and returns the Action the plugin
-    ...    records for the choice Playwright reports on ``${reported}``.
+    [Documentation]    Returns the selector the plugin records for the choice of ``${value}``
+    ...    Playwright reports on ``${reported}``, and selects it in ``${target}``.
     [Arguments]    ${target}    ${reported}    ${value}
+    ${selector} =    Recorded Selector    select    ${reported}
     Select Options By    ${target}    value    ${value}
-    ${action} =    Recorded Action    ${{ {"name": "select", "selector": $reported, "options": [$value]} }}
-    RETURN    ${action}
+    RETURN    ${selector}

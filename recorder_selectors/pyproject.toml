@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "robotframework-browser-recorder-selectors"
 dynamic = ["version"]
-# Needs the __recordedAction and __recordingStarted hooks of Record Keyword.
+# Needs the __rewriteSelector hook of Record Keyword.
 dependencies = ["robotframework-browser>=21.0.0"]
 requires-python = ">= 3.11"
 description = "A Browser library plugin that makes the recorder record readable selectors."

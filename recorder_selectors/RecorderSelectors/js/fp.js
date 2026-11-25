@@ -16,25 +16,17 @@ function firstDefined(xs, f) {
   return undefined;
 }
 
-// `reduce` with an async `f`, applied to one element after the other.
-function reduceAsync(xs, f, init) {
-  return xs.reduce(
-    async (acc, x, i) => f(await acc, x, i),
-    Promise.resolve(init),
-  );
-}
-
 // `xs` without repeats, in their order.
 function distinct(xs) {
   return [...new Set(xs)];
 }
 
-// The results of the async `f` on `xs`, one after the other, up to and
-// including the first result for which `done` holds; `f` is not called after it.
-async function mapUntilAsync(xs, f, done) {
+// The results of `f` on `xs`, one after the other, up to and including the
+// first result for which `done` holds; `f` is not called after it.
+function mapUntil(xs, f, done) {
   const results = [];
   for (const x of xs) {
-    const result = await f(x);
+    const result = f(x);
     results.push(result);
     if (done(result)) return results;
   }
@@ -44,7 +36,6 @@ async function mapUntilAsync(xs, f, done) {
 module.exports = {
   replaceAt,
   firstDefined,
-  reduceAsync,
   distinct,
-  mapUntilAsync,
+  mapUntil,
 };

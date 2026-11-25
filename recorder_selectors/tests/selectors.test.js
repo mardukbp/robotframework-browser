@@ -104,8 +104,8 @@ describe("reading and changing parts", () => {
 describe("rules", () => {
   // The selectors `rule` tries for a click Playwright recorded as `recorded`
   // on the element `element`; none when the rule does not apply.
-  const tried = (rule, recorded, element, action = { name: "click" }) =>
-    selectorsToTry(rule, { action, recorded: parse(recorded), element }).map(({ selector }) => selector);
+  const tried = (rule, recorded, element, name = "click") =>
+    selectorsToTry(rule, { name, recorded: parse(recorded), element }).map(({ selector }) => selector);
 
   it("exact_names makes the name exact and drops a loose description", () => {
     const element = { name: "Details & Termine", text: "Details & Termine", texts: [], description: "" };
@@ -169,7 +169,7 @@ describe("rules", () => {
     assert.deepEqual(tried(numberWidening, "css=div", element), []);
   });
 
-  it("id_engine writes a CSS id, of a frame or an element, with the id engine", () => {
+  it("id_engine writes a CSS id with the id engine", () => {
     const written = (raw) => print([withIdEngine(parsePart(raw))]);
     assert.equal(written("#oevd-iframe"), "id=oevd-iframe");
     assert.equal(written("#APD_\\:\\:SalesOrderType-inner-vhi"), "id=APD_::SalesOrderType-inner-vhi");
@@ -203,6 +203,6 @@ describe("rules", () => {
     assert.deepEqual(tried(titleDescription, recorded, element), ['role=button[description="Suche löschen"s]']);
     assert.deepEqual(tried(titleDescription, recorded, { ...element, hasDescription: true }), []);
     assert.deepEqual(tried(titleDescription, recorded, { ...element, title: "" }), []);
-    assert.deepEqual(tried(titleDescription, recorded, element, { name: "pick" }), []);
+    assert.deepEqual(tried(titleDescription, recorded, element, "pick"), []);
   });
 });

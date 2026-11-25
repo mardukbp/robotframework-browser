@@ -1,18 +1,12 @@
-// What runs in the page. Playwright sends a function there as its source text,
-// so each function here uses nothing from outside its own body;
-// `withHelpersInside` puts the helpers a function needs inside it.
+// What the rules read of the recorded element. Runs in the page, inside the
+// extension's hook (see bundle.js).
 
 const { scopeOf } = require("./scope.js");
 
-const CLICKABLE =
-  "a, button, input, select, textarea, summary, [role=link], [role=button], " +
-  "[role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option]";
-
 // What the rules read as `element`: a description of `element` that
-// approximates what Playwright computes. It chooses the selectors to try; the
-// page decides whether one finds the element. With `withPeers`, also the
-// elements with the same role, to check selectors against when the page is gone.
-function describeElement(element, withPeers) {
+// approximates what Playwright computes. It chooses the selectors to try;
+// Playwright's own engines decide whether one finds the element.
+function describeElement(element) {
   function normalizeSpace(text) {
     return (text || "").replace(/\s+/g, " ").trim();
   }
@@ -142,29 +136,6 @@ function describeElement(element, withPeers) {
     return texts.filter((text) => typeof text === "string" && text.trim() !== "");
   }
 
-  // --- peers: the elements with the element's role, also in shadow roots
-
-  function allElementsIn(root) {
-    const elements = [];
-    for (const e of root.querySelectorAll("*")) {
-      elements.push(e);
-      if (e.shadowRoot) elements.push(...allElementsIn(e.shadowRoot));
-    }
-    return elements;
-  }
-
-  function peersWithRole(role) {
-    return allElementsIn(element.ownerDocument)
-      .filter((e) => roleOf(e) === role)
-      .map((e) => ({
-        role,
-        name: nameOf(e),
-        description: descriptionOf(e),
-        scopeText: scopeOf(e),
-        isTarget: e === element,
-      }));
-  }
-
   // --- the description
 
   const role = roleOf(element);
@@ -190,53 +161,7 @@ function describeElement(element, withPeers) {
     scopeText: scopeOf(element),
     texts: textsOf(element),
   };
-  if (!withPeers || !role) return described;
-  return { ...described, peers: peersWithRole(role) };
+  return described;
 }
 
-// `fn` with `helpers` defined inside its body, so it can run in the page.
-function withHelpersInside(fn, helpers) {
-  const definitions = Object.entries(helpers)
-    .map(([name, helper]) => `const ${name} = ${helper};`)
-    .join("\n");
-  return new Function(
-    `return function (...args) {\n${definitions}\nreturn (${fn})(...args);\n}`,
-  )();
-}
-
-// `describeElement` as Playwright can run it in the page.
-const DESCRIBE_ELEMENT = withHelpersInside(describeElement, { scopeOf });
-
-// At each trusted press, outside Browser's toolbar and Playwright's overlay,
-// sends the description of the pressed element, with its peers, through `binding`.
-function reportPresses(binding, clickable, describeElement) {
-  if (window.__rfbRecorderSelectorsInstalled) return;
-  window.__rfbRecorderSelectorsInstalled = true;
-
-  function pressedElement(event) {
-    if (!event.isTrusted) return undefined;
-    const path = event.composedPath().filter((node) => node instanceof Element);
-    if (path.some((e) => e.localName === "x-pw-glass")) return undefined;
-    return path.find((e) => e.matches(clickable)) || path[0];
-  }
-
-  function report(event) {
-    const element = pressedElement(event);
-    if (!element) return;
-    try {
-      window[binding](describeElement(element, true));
-    } catch {
-      // A page that blocks the binding records without the snapshot.
-    }
-  }
-
-  window.addEventListener("pointerdown", report, true);
-}
-
-// The source that reports every press through the binding `binding`.
-function pressScript(binding) {
-  const args = [JSON.stringify(binding), JSON.stringify(CLICKABLE), DESCRIBE_ELEMENT];
-  return `(${reportPresses})(${args.join(", ")});`;
-}
-
-module.exports = { DESCRIBE_ELEMENT, pressScript };
+module.exports = { describeElement };

@@ -6,9 +6,8 @@ const assert = require("node:assert/strict");
 const {
   replaceAt,
   firstDefined,
-  reduceAsync,
   distinct,
-  mapUntilAsync,
+  mapUntil,
 } = require("../RecorderSelectors/js/fp.js");
 
 describe("fp", () => {
@@ -31,28 +30,13 @@ describe("fp", () => {
     assert.equal(firstDefined([0], () => null), null);
   });
 
-  it("reduceAsync runs the steps one after the other", async () => {
-    const order = [];
-    const total = await reduceAsync(
-      [30, 10, 20],
-      async (sum, ms, i) => {
-        await new Promise((resolve) => setTimeout(resolve, ms));
-        order.push(i);
-        return sum + ms;
-      },
-      0,
-    );
-    assert.equal(total, 60);
-    assert.deepEqual(order, [0, 1, 2]);
-  });
-
-  it("mapUntilAsync maps one after the other and stops after the first done", async () => {
+  it("mapUntil maps one after the other and stops after the first done", () => {
     const called = [];
-    const f = async (x) => (called.push(x), x * 10);
-    assert.deepEqual(await mapUntilAsync([1, 2, 3, 4], f, (y) => y === 20), [10, 20]);
+    const f = (x) => (called.push(x), x * 10);
+    assert.deepEqual(mapUntil([1, 2, 3, 4], f, (y) => y === 20), [10, 20]);
     assert.deepEqual(called, [1, 2]);
-    assert.deepEqual(await mapUntilAsync([1, 3], f, (y) => y === 20), [10, 30]);
-    assert.deepEqual(await mapUntilAsync([], f, () => true), []);
+    assert.deepEqual(mapUntil([1, 3], f, (y) => y === 20), [10, 30]);
+    assert.deepEqual(mapUntil([], f, () => true), []);
   });
 
   it("distinct drops repeats and keeps the order", () => {

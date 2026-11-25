@@ -1,32 +1,54 @@
-// The JS side of HookProbe.py. It calls the hooks of the RecorderSelectors
-// extension the way Browser does, and, loaded after the plugin, sees in its own
-// __recordedAction hook every Action the plugin gave a real recording.
+// The JS side of HookProbe.py. It runs the __rewriteSelector hook of the
+// RecorderSelectors extension the way `Record Keyword` documents it, for an
+// Action given as Playwright reports it: in the page, taking its selector only
+// when it finds exactly the element of the Action, as Browser does, after the
+// frames Playwright found.
 
 const plugin = require("../RecorderSelectors/js/index.js");
 
-let seen = [];
+const FRAME_ENTRY = " >> internal:control=enter-frame >> ";
+const HOOK = "__recorderSelectorsProbeHook";
+const BUDGET_MS = 500;
 
-// Browser chains the hooks in load order, so this one gets the plugin's result.
-exports.__recordedAction = ({ action }) => {
-  seen.push(action);
-  return undefined;
+// The selector the plugin records for the Action `name` on `selector`, before
+// the Action has an effect on the page.
+exports.recordedSelector = async (name, selector, page) => {
+  // Browser gives the hook Playwright's selector engines in the page through
+  // the console API; so does the probe.
+  await page.context()._exposeConsoleApi();
+  const entered = selector.lastIndexOf(FRAME_ENTRY);
+  const frames = entered === -1 ? "" : selector.slice(0, entered + FRAME_ENTRY.length);
+  const handle = await page.locator(selector).elementHandle({ timeout: 5000 });
+  try {
+    const frame = await handle.ownerFrame();
+    await frame.evaluate(`window.${HOOK} = (${plugin.__rewriteSelector});`);
+    const local = selector.slice(frames.length);
+    const { rewritten, log } = await handle.evaluate(runHook, [HOOK, name, local, BUDGET_MS]);
+    log.forEach((line) => console.log(line));
+    return frames + rewritten;
+  } finally {
+    await handle.dispose();
+  }
 };
 
-exports.startRecordingHooks = async (page) => {
-  await plugin.__recordingStarted({ context: page.context() });
-};
-
-// The Action the plugin records for `action`: the one its hook gives, or
-// `action` itself when the hook keeps it.
-exports.recordedAction = async (action, page) => {
-  const context = page.context();
-  const changed = await plugin.__recordedAction({ action, page, context });
-  if (changed === undefined) return action;
-  return changed;
-};
-
-exports.actionsSeen = () => seen;
-
-exports.forgetActionsSeen = () => {
-  seen = [];
-};
+// In the page: the selector the hook gives for `element`, and what it logged.
+function runHook(element, [hookName, name, selector, budgetMs]) {
+  const log = [];
+  const query = (candidate) => window.playwright.$$(candidate);
+  const deadline = performance.now() + budgetMs;
+  const given = window[hookName]({
+    name,
+    selector,
+    element,
+    query,
+    log: (message) => log.push(String(message)),
+    timeLeft: () => Math.max(0, deadline - performance.now()),
+  });
+  if (given === undefined) return { rewritten: selector, log };
+  const found = query(given);
+  if (found.length !== 1 || found[0] !== element) {
+    log.push(`probe: ${given} does not find the element alone, it is not recorded`);
+    return { rewritten: selector, log };
+  }
+  return { rewritten: given, log };
+}

@@ -36,7 +36,7 @@ A Button Sharing Its Name With Another Is Recorded By Its Description
     Should Be Equal    ${selector}    role=button[description="Remove second"s]
     Get Text    ${selector}    ==    Remove second
 
-A Button Removed By Its Click Is Recorded By Its Description Seen At The Press
+A Button Removed By Its Click Is Recorded By Its Description Seen Before The Click
     Add Elements    <div id="dialog"><button aria-label="Close dialog" title="Close">Close</button></div>
     Evaluate JavaScript    id=dialog    (dialog) => dialog.addEventListener('click', () => dialog.remove())
     ${selector} =    Recorded Click    css=[aria-label="Close dialog"]    internal:role=button[name="Close dialog"i]

@@ -14,33 +14,33 @@ Test Tags         recorder
 
 *** Test Cases ***
 A Selected Option Is Recorded By The Caption Above The Select
-    ${action} =    Recorded Select    css=#order >> select >> nth=0    select[name="shippingList"]    express
-    Should Be Equal    ${action}[selector]    role=combobox >> scope="Shipping*"
-    Get Property    ${action}[selector]    value    ==    express
+    ${selector} =    Recorded Select    css=#order >> select >> nth=0    select[name="shippingList"]    express
+    Should Be Equal    ${selector}    role=combobox >> scope="Shipping*"
+    Get Property    ${selector}    value    ==    express
 
 A Caption That Starts Like Another Caption Finds Its Own Select
-    ${action} =    Recorded Select    css=#order >> select >> nth=1    select[name="regionList"]    eu
-    Should Be Equal    ${action}[selector]    role=combobox >> scope="Shipping/Region*"
-    Get Property    ${action}[selector]    value    ==    eu
+    ${selector} =    Recorded Select    css=#order >> select >> nth=1    select[name="regionList"]    eu
+    Should Be Equal    ${selector}    role=combobox >> scope="Shipping/Region*"
+    Get Property    ${selector}    value    ==    eu
 
 A Caption In The Cell Before The Select Scopes It From The Row
-    ${action} =    Recorded Select    css=#order >> select >> nth=2    select[name="packagingList"]    gift
-    Should Be Equal    ${action}[selector]    role=combobox >> scope="Packaging"
-    Get Property    ${action}[selector]    value    ==    gift
+    ${selector} =    Recorded Select    css=#order >> select >> nth=2    select[name="packagingList"]    gift
+    Should Be Equal    ${selector}    role=combobox >> scope="Packaging"
+    Get Property    ${selector}    value    ==    gift
 
 A Select In An Iframe Is Recorded By Its Caption
     Evaluate JavaScript
     ...    ${None}
     ...    (fields) => new Promise((loaded) => { const frame = document.createElement('iframe'); frame.id = 'booking'; frame.onload = loaded; frame.srcdoc = fields; document.body.prepend(frame); })
     ...    arg=${ROOM_FIELDS}
-    ${action} =    Recorded Select
+    ${selector} =    Recorded Select
     ...    id=booking >>> select[name="roomKeyList"]
     ...    \#booking >> internal:control=enter-frame >> select[name="roomKeyList"]
     ...    double
     Should Be Equal
-    ...    ${action}[selector]
-    ...    id=booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
-    Get Property    ${action}[selector]    value    ==    double
+    ...    ${selector}
+    ...    \#booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
+    Get Property    ${selector}    value    ==    double
 
 A Select In A Cross-Origin Iframe Is Recorded By Its Caption
     ${url} =    Evaluate    $PAGE_URL.replace('localhost', '127.0.0.1')
@@ -52,27 +52,27 @@ A Select In A Cross-Origin Iframe Is Recorded By Its Caption
     ...    id=booking >>> body
     ...    (body, fields) => body.insertAdjacentHTML('afterbegin', fields)
     ...    arg=${ROOM_FIELDS}
-    ${action} =    Recorded Select
+    ${selector} =    Recorded Select
     ...    id=booking >>> select[name="roomKeyList"]
     ...    \#booking >> internal:control=enter-frame >> select[name="roomKeyList"]
     ...    double
     Should Be Equal
-    ...    ${action}[selector]
-    ...    id=booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
-    Get Property    ${action}[selector]    value    ==    double
+    ...    ${selector}
+    ...    \#booking >> internal:control=enter-frame >> role=combobox >> scope="Room type*"
+    Get Property    ${selector}    value    ==    double
 
 A Field Whose Label Names A Wrapper With The Same Id Is Recorded By The Label
     Add Elements
     ...    <div><label for="firma">Firmenname*</label>
     ...    <div><span id="firma"><input type="text" id="firma"></span></div></div>
     Fill Text    css=input#firma    imbus
-    ${action} =    Recorded Action    ${{ {"name": "fill", "selector": "#firma >> nth=1", "text": "imbus"} }}
-    Should Be Equal    ${action}[selector]    role=textbox >> scope="Firmenname*"
-    Get Property    ${action}[selector]    value    ==    imbus
+    ${selector} =    Recorded Selector    fill    \#firma >> nth=1
+    Should Be Equal    ${selector}    role=textbox >> scope="Firmenname*"
+    Get Property    ${selector}    value    ==    imbus
 
 A Select With A Label Keeps Its Name
-    ${action} =    Recorded Select    id=payment    internal:label="Payment"i    invoice
-    Should Be Equal    ${action}[selector]    internal:label="Payment"s
+    ${selector} =    Recorded Select    id=payment    internal:label="Payment"i    invoice
+    Should Be Equal    ${selector}    internal:label="Payment"s
 
 
 *** Variables ***

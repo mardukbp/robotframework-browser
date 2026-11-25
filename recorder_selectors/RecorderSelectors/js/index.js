@@ -1,36 +1,11 @@
-// The JS extension the RecorderSelectors plugin loads: Browser's recorder hooks,
-// and the scope selector engine.
+// The JS extension the RecorderSelectors plugin loads: Browser's recorder
+// hook, and the scope selector engine.
 
-const { pipeline, selectorStep } = require("./run_rules.js");
-const { install, PRESSES } = require("./page_scripts.js");
+const { bundle } = require("./bundle.js");
 const scopeEngine = require("./scope.js");
-const selectLabels = require("./select_labels.js");
-const idEngine = require("./id_engine.js");
 
-// The selector rules, in order, each on the selector the one before returned.
-const SELECTOR_RULES = [
-  require("./rules/number_widening.js"),
-  require("./rules/has_text.js"),
-  require("./rules/title_description.js"),
-  require("./rules/aria_label.js"),
-  require("./rules/label_scope.js"),
-  require("./rules/caption_scope.js"),
-  require("./rules/exact_names.js"),
-];
-
-// A choice in a select is first recorded by its labels, on Playwright's own
-// selector; then the selector rules run, and last the CSS ids are written with
-// the id engine.
-module.exports.__recordedAction = pipeline([
-  selectLabels.step,
-  ...SELECTOR_RULES.map(selectorStep),
-  idEngine.step,
-]);
-
-// Before the first recording in a context: the press snapshot and the chosen
-// labels are taken in the page.
-module.exports.__recordingStarted = ({ context }) =>
-  install(context, [PRESSES, selectLabels.pageScript]);
+// Browser runs it in the page, at the moment of each Action: see hook.js.
+module.exports.__rewriteSelector = bundle("hook.js", "rewriteSelector");
 
 // Called by the plugin when it is imported, so that recorded `scope=` selectors
 // also work when the tests run.
