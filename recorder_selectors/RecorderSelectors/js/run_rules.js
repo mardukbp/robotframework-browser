@@ -42,7 +42,7 @@ const { parse, print } = require("./selector.js");
 // Browser's `__rewriteSelector` hook made of the steps: each runs on the
 // selector the one before gave. Gives the selector when it changed, or undefined.
 function pipeline(steps) {
-  return function rewriteSelector({ name, selector, element, query, log, timeLeft }) {
+  return function rewriteSelector({ name, selector, element, query, log }) {
     let described;
     const describe = () => {
       described ??= describeElement(element);
@@ -50,13 +50,7 @@ function pipeline(steps) {
     };
     const ask = { name, element, query, log, describe };
     let current = selector;
-    for (const step of steps) {
-      if (timeLeft && timeLeft() === 0) {
-        log(`recorder_selectors ${step.name}: skipped, out of time`);
-        continue;
-      }
-      current = runStep(step, current, ask);
-    }
+    for (const step of steps) current = runStep(step, current, ask);
     if (current === selector) return undefined;
     return current;
   };

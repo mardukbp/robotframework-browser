@@ -143,8 +143,8 @@ once.
 
 - The description of an element (`role`, `name`, `description`, ...) approximates what
   Playwright computes. It chooses the selectors to try; only the check in the page decides.
-- The hook runs while the page waits for its click: all rules share the 500 ms Browser gives
-  the hooks of one Action (`timeLeft`), and a step after that is skipped.
+- The hook runs while the page waits for its click, so a rule must stay fast. The element
+  is described once per Action, and a rule asks the page only for the selectors it tries.
 - The hook runs before the click handlers of the page, but after its `pointerdown` and
   `mousedown` handlers: a control that changes the page on those already has.
 - With `Connect To Browser    use_cdp=True`, a page that logged elements to the console

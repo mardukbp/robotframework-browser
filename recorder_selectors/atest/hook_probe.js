@@ -8,7 +8,6 @@ const plugin = require("../RecorderSelectors/js/index.js");
 
 const FRAME_ENTRY = " >> internal:control=enter-frame >> ";
 const HOOK = "__recorderSelectorsProbeHook";
-const BUDGET_MS = 500;
 
 // The selector the plugin records for the Action `name` on `selector`, before
 // the Action has an effect on the page.
@@ -23,7 +22,7 @@ exports.recordedSelector = async (name, selector, page) => {
     const frame = await handle.ownerFrame();
     await frame.evaluate(`window.${HOOK} = (${plugin.__rewriteSelector});`);
     const local = selector.slice(frames.length);
-    const { rewritten, log } = await handle.evaluate(runHook, [HOOK, name, local, BUDGET_MS]);
+    const { rewritten, log } = await handle.evaluate(runHook, [HOOK, name, local]);
     log.forEach((line) => console.log(line));
     return frames + rewritten;
   } finally {
@@ -32,18 +31,10 @@ exports.recordedSelector = async (name, selector, page) => {
 };
 
 // In the page: the selector the hook gives for `element`, and what it logged.
-function runHook(element, [hookName, name, selector, budgetMs]) {
+function runHook(element, [hookName, name, selector]) {
   const log = [];
   const query = (candidate) => window.playwright.$$(candidate);
-  const deadline = performance.now() + budgetMs;
-  const given = window[hookName]({
-    name,
-    selector,
-    element,
-    query,
-    log: (message) => log.push(String(message)),
-    timeLeft: () => Math.max(0, deadline - performance.now()),
-  });
+  const given = window[hookName]({ name, selector, element, query, log: (message) => log.push(String(message)) });
   if (given === undefined) return { rewritten: selector, log };
   const found = query(given);
   if (found.length !== 1 || found[0] !== element) {

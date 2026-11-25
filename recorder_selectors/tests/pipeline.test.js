@@ -14,7 +14,7 @@ const query = () => [element];
 
 function hookArgs(selector, more = {}) {
   const logged = [];
-  const args = { name: "click", selector, element, query, log: (m) => logged.push(m), timeLeft: () => 500, ...more };
+  const args = { name: "click", selector, element, query, log: (m) => logged.push(m), ...more };
   return { logged, args };
 }
 
@@ -71,12 +71,6 @@ describe("pipeline", () => {
     assert.equal(seen[0], seen[1]);
   });
 
-  it("skips the steps after Browser's time is up", () => {
-    const hook = pipeline([step("late", () => "#late")]);
-    const { args, logged } = hookArgs("#a", { timeLeft: () => 0 });
-    assert.equal(hook(args), undefined);
-    assert.deepEqual(logged, ["recorder_selectors late: skipped, out of time"]);
-  });
 });
 
 describe("selectorStep", () => {
