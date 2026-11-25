@@ -49,6 +49,28 @@ describe("pipeline", () => {
     assert.deepEqual(logged, ["recorder_selectors broken: #a kept: Error: boom"]);
   });
 
+  it("keeps the selector a step got when the one it gives does not find exactly the element", () => {
+    const other = { id: "other" };
+    const queryOf = { "#late": [other], "#gone": [], "#c": [element] };
+    const hook = pipeline([step("first", () => "#c"), step("wrong", () => "#late"), step("none", () => "#gone")]);
+    const { args, logged } = hookArgs("#a", { query: (selector) => queryOf[selector] });
+    assert.equal(hook(args), "#c");
+    assert.deepEqual(logged, [
+      "recorder_selectors wrong: #late finds another element, #c kept",
+      "recorder_selectors none: #gone finds no element, #c kept",
+    ]);
+  });
+
+  it("describes the element once for all steps", () => {
+    const seen = [];
+    const describing = (name) => step(name, ({ describe }) => seen.push(describe()) && undefined);
+    const hook = pipeline([describing("first"), describing("second")]);
+    const fakeElement = { matches: () => false, labels: [], getAttribute: () => null, hasAttribute: () => false };
+    hook(hookArgs("#a", { element: fakeElement }).args);
+    assert.equal(seen.length, 2);
+    assert.equal(seen[0], seen[1]);
+  });
+
   it("skips the steps after Browser's time is up", () => {
     const hook = pipeline([step("late", () => "#late")]);
     const { args, logged } = hookArgs("#a", { timeLeft: () => 0 });
@@ -83,8 +105,48 @@ describe("the extension", () => {
 
   it("writes a CSS id left after the rules with the id engine, in the page", () => {
     const hook = vm.runInNewContext(`(${extension.__rewriteSelector})`, {});
-    const button = { localName: "button", getAttribute: () => null, hasAttribute: () => false };
-    const { args } = hookArgs("#APD_\\:\\:Note", { name: "fill", element: button, query: () => [button] });
+    const button = {
+      localName: "button",
+      textContent: "",
+      labels: [],
+      parentElement: null,
+      parentNode: null,
+      previousSibling: null,
+      previousElementSibling: null,
+      getAttribute: () => null,
+      hasAttribute: () => false,
+      matches: () => false,
+      getRootNode: () => ({}),
+    };
+    const { args, logged } = hookArgs("#APD_\\:\\:Note", { name: "fill", element: button, query: () => [button] });
     assert.equal(hook(args), "id=APD_::Note");
+    assert.deepEqual(logged, []);
+  });
+});
+
+describe("bundle", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { bundle } = require("../RecorderSelectors/js/bundle.js");
+
+  function bundled(files, entry = "entry.js") {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-"));
+    for (const [name, source] of Object.entries(files)) fs.writeFileSync(path.join(root, name), source);
+    return () => vm.runInNewContext(bundle(entry, "value", root), {});
+  }
+
+  it("follows relative requires in either quote style", () => {
+    const value = bundled({
+      "entry.js": `module.exports.value = require('./a.js').a + require("./b.js").b;`,
+      "a.js": "module.exports.a = 1;",
+      "b.js": "module.exports.b = 2;",
+    });
+    assert.equal(value(), 3);
+  });
+
+  it("fails in the page, with its name, on a require it does not hold", () => {
+    const value = bundled({ "entry.js": `module.exports.value = require("fs");` });
+    assert.throws(value, /entry\.js requires fs, which the bundle does not hold/);
   });
 });

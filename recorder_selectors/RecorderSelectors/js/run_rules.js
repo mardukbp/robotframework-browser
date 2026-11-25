@@ -5,9 +5,13 @@
 // Browser runs the hook in the page before the Action has any effect on it
 // (see `Record Keyword`, *Changing the recorded selectors*), so the element and
 // its page are as the user saw them, as replaying the recording finds them.
+// The selector is the one inside the element's frame: Browser keeps the frames
+// before it as Playwright recorded them.
 //
-// A step is `{ name, run }`: `run({ name, selector, element, query, log })`
-// gives the selector to record, or undefined to keep it.
+// A step is `{ name, run }`: `run({ name, selector, element, query, log,
+// describe })` gives the selector to record, or undefined to keep it. The
+// pipeline keeps it only when it finds exactly the element, as Browser does,
+// so a step that gives a wrong selector loses nothing the steps before gave.
 //
 // A rule says when it applies and which selectors to try then, in the manner
 // of Clara Rules. It tests three facts with the conditions of conditions.js:
@@ -22,18 +26,16 @@
 //   when        `{ name, recorded, element }`, each a list of conditions on
 //               that fact; the rule applies when all of them hold.
 //   tryInOrder  `({ recorded, element }) => [selector, ...]`: the selectors to
-//               try, each a part or a list of parts (see selector.js) without
-//               the frames. The first that finds only the recorded element is
-//               recorded. A selector with a missing part is left out, so
+//               try, each a part or a list of parts (see selector.js). The
+//               first that finds only the recorded element is recorded. A
+//               selector with a missing part is left out, so
 //               `[part, scope(element.scopeText)]` needs no scope to be there.
-//   checkHiddenElementsToo  optional: look for `role` parts among hidden
-//               elements too, for an element on a page a dialog hides.
 //   otherwiseUseIndex  optional: when no selector finds only the element, the
 //               first one with `>> nth=<index>` of the element.
 
 const { mapUntil } = require("./fp.js");
 const { describeElement } = require("./page.js");
-const { parse, print, withHidden } = require("./selector.js");
+const { parse, print } = require("./selector.js");
 
 // ---------------------------------------------------------------- the hook
 
@@ -41,7 +43,12 @@ const { parse, print, withHidden } = require("./selector.js");
 // selector the one before gave. Gives the selector when it changed, or undefined.
 function pipeline(steps) {
   return function rewriteSelector({ name, selector, element, query, log, timeLeft }) {
-    const ask = { name, element, query, log, described: undefined };
+    let described;
+    const describe = () => {
+      described ??= describeElement(element);
+      return described;
+    };
+    const ask = { name, element, query, log, describe };
     let current = selector;
     for (const step of steps) {
       if (timeLeft && timeLeft() === 0) {
@@ -55,14 +62,24 @@ function pipeline(steps) {
   };
 }
 
-// One step on `selector`; a step that fails keeps the selector it got.
+// The selector after one step: the one it gave when that finds exactly the
+// element, otherwise the one it got.
 function runStep(step, selector, ask) {
+  const log = (message) => ask.log(`recorder_selectors ${step.name}: ${message}`);
+  let given;
   try {
-    return step.run({ ...ask, selector }) ?? selector;
+    given = step.run({ ...ask, selector });
   } catch (error) {
-    ask.log(`recorder_selectors ${step.name}: ${selector} kept: ${error}`);
+    log(`${selector} kept: ${error}`);
     return selector;
   }
+  if (given === undefined || given === selector) return selector;
+  const reason = whyNotTheElement(check(ask, given));
+  if (reason) {
+    log(`${given} ${reason}, ${selector} kept`);
+    return selector;
+  }
+  return given;
 }
 
 // A rule as a step.
@@ -78,7 +95,6 @@ function applyRule(rule, ask) {
   if (!allHold(when.name, ask.name)) return undefined;
   const recorded = parse(ask.selector);
   if (!allHold(when.recorded, recorded)) return undefined;
-  ask.described ??= describeElement(ask.element);
   return trySelectors(rule, ask, recorded);
 }
 
@@ -91,21 +107,20 @@ function allHold(conditions, fact) {
 // The first selector of `rule` that finds only the recorded element.
 function trySelectors(rule, ask, recorded) {
   const log = (message) => ask.log(`recorder_selectors ${rule.name}: ${message}`);
-  const proposed = selectorsToTry(rule, { recorded, element: ask.described });
+  const proposed = selectorsToTry(rule, { recorded, element: ask.describe() });
   const checked = mapUntil(
     proposed,
-    (selector) => checkSelector(ask, selector, rule),
-    findsOnlyTheElement,
+    (selector) => check(ask, selector),
+    (checkedSelector) => whyNotTheElement(checkedSelector) === undefined,
   );
   const { selector, rejected } = pickSelector(rule, checked);
-  rejected.map(whyRejected).forEach(log);
+  rejected.forEach((checkedSelector) => log(`${checkedSelector.selector} ${whyNotTheElement(checkedSelector)}`));
   if (!selector && proposed.length > 0) log(`${recorded.selector} kept`);
   return selector;
 }
 
-// `{ parts, selector }` for each selector `rule` tries, the selector with the
-// frames; none when one of its conditions does not hold. It asks nothing of
-// the page.
+// The selectors `rule` tries; none when one of its conditions does not hold.
+// It asks nothing of the page.
 function selectorsToTry(rule, { name, recorded, element }) {
   const when = rule.when ?? {};
   if (name && !allHold(when.name, name)) return [];
@@ -115,33 +130,37 @@ function selectorsToTry(rule, { name, recorded, element }) {
     .tryInOrder({ recorded, element })
     .map((selector) => [selector].flat())
     .filter((parts) => parts.length > 0 && parts.every(Boolean))
-    .map((parts) => ({ parts, selector: print([...recorded.frames, ...parts]) }));
+    .map((parts) => print(parts));
 }
 
-// The selector with `match`: how many elements it finds, and where the
-// recorded element is among them; no `match` when it cannot be checked.
-function checkSelector(ask, proposed, rule) {
-  let parts = proposed.parts;
-  if (rule.checkHiddenElementsToo) parts = parts.map(withHidden);
-  const checked = print(parts);
+// ---------------------------------------------------- asking the page
+
+// `{ selector, match }`: how many elements `selector` finds, and where the
+// recorded element is among them; `{ selector, error }` when it cannot be checked.
+function check(ask, selector) {
   try {
-    const found = ask.query(checked);
-    return { ...proposed, match: { count: found.length, index: found.indexOf(ask.element) } };
+    const found = ask.query(selector);
+    return { selector, match: { count: found.length, index: found.indexOf(ask.element) } };
   } catch (error) {
-    return { ...proposed, error: String(error).split("\n")[0] };
+    return { selector, error: String(error).split("\n")[0] };
   }
 }
 
-function findsOnlyTheElement({ match }) {
-  if (!match) return false;
-  return match.count === 1 && match.index === 0;
+// Why a checked selector does not find exactly the recorded element, or
+// undefined when it does.
+function whyNotTheElement({ match, error }) {
+  if (!match) return `cannot be checked: ${error}`;
+  if (match.count === 0) return "finds no element";
+  if (match.count > 1) return `finds ${match.count} elements`;
+  if (match.index !== 0) return "finds another element";
+  return undefined;
 }
 
 // `{ selector, rejected }`: the selector that finds only the element, or the
-// first one with `nth=` when the rule falls back to that, and the selectors
-// rejected before it.
+// first one with `nth=` when the rule falls back to that, and the checked
+// selectors rejected before it.
 function pickSelector(rule, checked) {
-  const unique = checked.find(findsOnlyTheElement);
+  const unique = checked.find((checkedSelector) => whyNotTheElement(checkedSelector) === undefined);
   if (unique) {
     const rejected = checked.slice(0, checked.indexOf(unique));
     return { selector: unique.selector, rejected };
@@ -156,11 +175,6 @@ function withIndex(rule, checked) {
   const first = checked.find(({ match }) => match);
   if (!first || first.match.index < 0) return undefined;
   return `${first.selector} >> nth=${first.match.index}`;
-}
-
-function whyRejected({ selector, match, error }) {
-  if (!match) return `${selector} cannot be checked: ${error}`;
-  return `${selector} finds ${match.count} elements`;
 }
 
 module.exports = { pipeline, selectorStep, selectorsToTry };

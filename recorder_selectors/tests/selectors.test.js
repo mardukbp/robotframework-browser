@@ -105,7 +105,7 @@ describe("rules", () => {
   // The selectors `rule` tries for a click Playwright recorded as `recorded`
   // on the element `element`; none when the rule does not apply.
   const tried = (rule, recorded, element, name = "click") =>
-    selectorsToTry(rule, { name, recorded: parse(recorded), element }).map(({ selector }) => selector);
+    selectorsToTry(rule, { name, recorded: parse(recorded), element });
 
   it("exact_names makes the name exact and drops a loose description", () => {
     const element = { name: "Details & Termine", text: "Details & Termine", texts: [], description: "" };

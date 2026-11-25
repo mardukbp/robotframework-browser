@@ -1,13 +1,14 @@
-// Browser runs the `__rewriteAction` hook in the page, so the hook must be one
+// Browser runs the `__rewriteSelector` hook in the page, so the hook must be one
 // function with nothing outside its body. `bundle` gives the source of one: an
 // expression that defines the modules `entry` needs, each in the CommonJS form
-// it has here, and evaluates to the export `name` of `entry`. Only relative
-// `require`s are followed; they are resolved here, when the bundle is made.
+// it has here, and evaluates to the export `name` of `entry`, a function.
+// Only relative `require`s are followed; they are resolved here, when the
+// bundle is made. Any other `require` fails in the page, with its name.
 
 const fs = require("fs");
 const path = require("path");
 
-const RELATIVE_REQUIRE = /require\("(\.{1,2}\/[^"]+)"\)/g;
+const RELATIVE_REQUIRE = /require\((["'])(\.{1,2}\/[^"']+)\1\)/g;
 
 function bundle(entry, name, root = __dirname) {
   const modules = collect(entry, root, new Map());
@@ -27,7 +28,10 @@ function bundle(entry, name, root = __dirname) {
     "  const [define, requires] = definitions[key];",
     "  const module = { exports: {} };",
     "  loaded[key] = module;",
-    "  define(module, module.exports, (request) => load(requires[request]));",
+    "  define(module, module.exports, (request) => {",
+    "    if (!(request in requires)) throw new Error(`${key} requires ${request}, which the bundle does not hold`);",
+    "    return load(requires[request]);",
+    "  });",
     "  return module.exports;",
     "}",
     `return load(${JSON.stringify(entry)})[${JSON.stringify(name)}];`,
@@ -41,7 +45,7 @@ function collect(key, root, modules) {
   const source = fs.readFileSync(path.join(root, key), "utf8");
   const requires = {};
   modules.set(key, { source, requires });
-  for (const [, request] of source.matchAll(RELATIVE_REQUIRE)) {
+  for (const [, , request] of source.matchAll(RELATIVE_REQUIRE)) {
     const required = path.posix.normalize(path.posix.join(path.posix.dirname(key), request));
     requires[request] = required;
     collect(required, root, modules);

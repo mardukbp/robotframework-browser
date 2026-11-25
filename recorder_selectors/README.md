@@ -48,9 +48,10 @@ such as `#oevd-iframe >> internal:control=enter-frame >> ...`, stay as Playwrigh
 them: the hook runs in the element's frame, which cannot reach the frame's element in the
 page around it.
 
-A rewritten selector is used only when it finds exactly the recorded element; otherwise the
-selector is kept and the reason is logged in `playwright-log.txt`, prefixed with
-`recorder_selectors <rule>:`.
+A rule's selector is used only when it finds exactly the recorded element; otherwise the
+selector before that rule is kept and the reason is logged in `playwright-log.txt`,
+prefixed with `recorder_selectors <rule>:`. So a rule whose selector Browser would reject
+does not cost the selectors the rules before it gave.
 
 `scope="Text"` keeps the elements found so far whose closest visible text before them is
 `Text`. Text in links, buttons and form controls is skipped, and so is the label of a
@@ -115,7 +116,7 @@ left out, so `[byText, scope(element.scopeText)]` is tried only when there is a 
 `js/run_rules.js` runs a rule: when the conditions on the Action's name and the recorded selector
 hold, it describes the recorded element, checks the conditions on it, tries each selector
 with Playwright's own engines (`query`) and records the first that finds only that element.
-`checkHiddenElementsToo` and `otherwiseUseIndex` change how the selectors are tried; the
+`otherwiseUseIndex` falls back to `nth=` when no selector finds only the element; the
 comment at the top of `run_rules.js` documents every field. All of it runs in the page,
 inside Browser's `__rewriteSelector` hook, at the moment of the Action and before it has any
 effect: a click that navigates, removes the element or opens a dialog has not done so yet,
@@ -131,9 +132,12 @@ Rules only compute with data, so they can be tested without a page: `selectorsTo
 element.
 
 Add the rule to the list in `js/hook.js`. Everything `js/hook.js` requires runs in the page:
-`js/bundle.js` puts those modules into the one function Browser runs there, following only
-relative `require`s, so they must not require Node modules, and the hook must give its
-result at once.
+`js/bundle.js` puts those modules into the one function Browser runs there: the extension
+exports `__rewriteSelector` as the source of an expression that evaluates to that function,
+which `Record Keyword` accepts as "a string with the source of one". The bundle follows only
+relative `require`s, in either quote style; any other `require` fails in the page with its
+name, so the modules must not require Node modules, and the hook must give its result at
+once.
 
 ## Limits
 

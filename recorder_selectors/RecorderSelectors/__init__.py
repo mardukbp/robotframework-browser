@@ -34,13 +34,15 @@ class RecorderSelectors(LibraryComponent):
       beside it: ``role=combobox >> scope="Mittelgeber*"``.
     - An element scoped by the id or CSS of an ancestor is scoped by the text before
       it: ``role=link[name*="Details"i] >> scope="Robot Framework"``.
-    - Last, the name or text the selector finds its element by is matched
+    - The name or text the selector finds its element by is matched
       exactly, with the element's whole name:
       ``role=link[name="Details & Termine"s] >> scope="Robot Framework"``.
+    - Last, a part that is only a CSS id is written with the ``id`` engine,
+      without CSS escapes: ``#APD_\\:\\:Note`` becomes ``id=APD_::Note``.
 
-    A rewritten selector is used only when it finds exactly the recorded
-    element; otherwise Playwright's is kept and the reason is logged in
-    ``playwright-log.txt``.
+    A rule's selector is used only when it finds exactly the recorded
+    element; otherwise the selector before that rule is kept and the reason is
+    logged in ``playwright-log.txt``.
 
     The rules change only selectors: everything else in a recorded keyword,
     such as the values of a choice in a select, is recorded as Playwright

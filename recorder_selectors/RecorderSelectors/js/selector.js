@@ -226,19 +226,6 @@ function withTarget(recorded, part) {
   return replaceAt(recorded.insideFrames, recorded.targetIndex, part);
 }
 
-// The `role` part that also finds hidden elements.
-function withHidden(part) {
-  if (part.engine !== "role") return part;
-  if (part.attrs.some((a) => a.key === "include-hidden")) return part;
-  const includeHidden = {
-    key: "include-hidden",
-    value: "true",
-    flag: "",
-    quoted: false,
-  };
-  return { ...part, attrs: [includeHidden, ...part.attrs] };
-}
-
 function isExact(flag) {
   return flag === "s";
 }
@@ -282,7 +269,6 @@ module.exports = {
   withName,
   withAttribute,
   withTarget,
-  withHidden,
   role,
   text,
   scope,
