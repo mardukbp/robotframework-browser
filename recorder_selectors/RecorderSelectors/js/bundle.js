@@ -1,4 +1,4 @@
-// Browser runs the `__rewriteSelector` hook in the page, so the hook must be one
+// Browser runs the `__rewriteAction` hook in the page, so the hook must be one
 // function with nothing outside its body. `bundle` gives the source of one: an
 // expression that defines the modules `entry` needs, each in the CommonJS form
 // it has here, and evaluates to the export `name` of `entry`, a function.

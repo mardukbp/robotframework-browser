@@ -39,7 +39,7 @@ const { parse, print } = require("./selector.js");
 
 // ---------------------------------------------------------------- the hook
 
-// Browser's `__rewriteSelector` hook made of the steps: each runs on the
+// The selector Browser's `__rewriteAction` hook gives (hook.js), made of the steps: each runs on the
 // selector the one before gave. Gives the selector when it changed, or undefined.
 function pipeline(steps) {
   return function rewriteSelector({ name, selector, element, query, log }) {

@@ -10,7 +10,7 @@ Library    Browser    plugins=RecorderSelectors
 ```
 
 The plugin has no keywords. It loads one JS extension that uses the recorder hook of
-Browser (`__rewriteSelector`; see `Record Keyword`) and registers
+Browser (`__rewriteAction`; see `Record Keyword`) and registers
 the `scope` selector engine, so the selectors it records also work when the tests run.
 It changes only selectors: everything else in a recorded keyword, such as the values of
 a choice in a select, is recorded as Playwright reports it.
@@ -118,7 +118,7 @@ hold, it describes the recorded element, checks the conditions on it, tries each
 with Playwright's own engines (`query`) and records the first that finds only that element.
 `otherwiseUseIndex` falls back to `nth=` when no selector finds only the element; the
 comment at the top of `run_rules.js` documents every field. All of it runs in the page,
-inside Browser's `__rewriteSelector` hook, at the moment of the Action and before it has any
+inside Browser's `__rewriteAction` hook, at the moment of the Action and before it has any
 effect: a click that navigates, removes the element or opens a dialog has not done so yet,
 so what the rule sees is the page replaying finds.
 
@@ -133,7 +133,7 @@ element.
 
 Add the rule to the list in `js/hook.js`. Everything `js/hook.js` requires runs in the page:
 `js/bundle.js` puts those modules into the one function Browser runs there: the extension
-exports `__rewriteSelector` as the source of an expression that evaluates to that function,
+exports `__rewriteAction` as the source of an expression that evaluates to that function,
 which `Record Keyword` accepts as "a string with the source of one". The bundle follows only
 relative `require`s, in either quote style; any other `require` fails in the page with its
 name, so the modules must not require Node modules, and the hook must give its result at
@@ -180,7 +180,7 @@ documents it:
   RecorderSelectors (`plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py`). A
   test gives the hook the name and the selector Playwright reports for a click or a
   choice, with Playwright's selector written into the test. The probe runs
-  `__rewriteSelector` in the page and takes its selector only when it finds exactly the
+  `__rewriteAction` in the page and takes its selector only when it finds exactly the
   element, as Browser does. The test checks the selector the plugin returns, then clicks
   or selects with Browser, as the user did. Like Browser, the probe gives the hook Playwright's selector
   engines through Playwright's console API. They run headless.

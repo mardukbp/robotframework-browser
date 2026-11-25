@@ -1,8 +1,8 @@
-// The JS side of HookProbe.py. It runs the __rewriteSelector hook of the
+// The JS side of HookProbe.py. It runs the __rewriteAction hook of the
 // RecorderSelectors extension the way `Record Keyword` documents it, for an
-// Action given as Playwright reports it: in the page, taking its selector only
-// when it finds exactly the element of the Action, as Browser does, after the
-// frames Playwright found.
+// Action given as Playwright reports it: in the page, taking the selector it
+// gives only when it finds exactly the element of the Action, as Browser does,
+// after the frames Playwright found.
 
 const plugin = require("../RecorderSelectors/js/index.js");
 
@@ -20,7 +20,7 @@ exports.recordedSelector = async (name, selector, page) => {
   const handle = await page.locator(selector).elementHandle({ timeout: 5000 });
   try {
     const frame = await handle.ownerFrame();
-    await frame.evaluate(`window.${HOOK} = (${plugin.__rewriteSelector});`);
+    await frame.evaluate(`window.${HOOK} = (${plugin.__rewriteAction});`);
     const local = selector.slice(frames.length);
     const { rewritten, log } = await handle.evaluate(runHook, [HOOK, name, local]);
     log.forEach((line) => console.log(line));
@@ -34,7 +34,8 @@ exports.recordedSelector = async (name, selector, page) => {
 function runHook(element, [hookName, name, selector]) {
   const log = [];
   const query = (candidate) => window.playwright.$$(candidate);
-  const given = window[hookName]({ name, selector, element, query, log: (message) => log.push(String(message)) });
+  const action = { name, selector };
+  const given = window[hookName]({ action, element, query, log: (message) => log.push(String(message)) })?.selector;
   if (given === undefined) return { rewritten: selector, log };
   const found = query(given);
   if (found.length !== 1 || found[0] !== element) {

@@ -1,4 +1,4 @@
-// Unit tests of the chain of steps behind the extension's __rewriteSelector,
+// Unit tests of the chain of steps behind the extension's __rewriteAction,
 // and of the bundle that carries it into the page.
 
 const { describe, it } = require("node:test");
@@ -89,16 +89,23 @@ describe("selectorStep", () => {
 describe("the extension", () => {
   it("has the page hook as its only recorder hook", () => {
     const hooks = Object.keys(extension).filter((name) => name.startsWith("__") && name !== "__registerScopeEngine");
-    assert.deepEqual(hooks, ["__rewriteSelector"]);
+    assert.deepEqual(hooks, ["__rewriteAction"]);
   });
 
   it("gives Browser the page hook as one function expression, without require", () => {
-    const hook = vm.runInNewContext(`(${extension.__rewriteSelector})`, {});
+    const hook = vm.runInNewContext(`(${extension.__rewriteAction})`, {});
     assert.equal(typeof hook, "function");
   });
 
+  it("changes only the selector of the Action, and nothing when it keeps the selector", () => {
+    const hook = vm.runInNewContext(`(${extension.__rewriteAction})`, {});
+    const fill = { name: "fill", selector: "text=x", text: "a" };
+    const logged = [];
+    assert.equal(hook({ action: fill, element, query, log: (m) => logged.push(m) }), undefined);
+  });
+
   it("writes a CSS id left after the rules with the id engine, in the page", () => {
-    const hook = vm.runInNewContext(`(${extension.__rewriteSelector})`, {});
+    const hook = vm.runInNewContext(`(${extension.__rewriteAction})`, {});
     const button = {
       localName: "button",
       textContent: "",
@@ -112,8 +119,10 @@ describe("the extension", () => {
       matches: () => false,
       getRootNode: () => ({}),
     };
-    const { args, logged } = hookArgs("#APD_\\:\\:Note", { name: "fill", element: button, query: () => [button] });
-    assert.equal(hook(args), "id=APD_::Note");
+    const logged = [];
+    const action = { name: "fill", selector: "#APD_\\:\\:Note", text: "a" };
+    const changes = hook({ action, element: button, query: () => [button], log: (m) => logged.push(m) });
+    assert.equal(JSON.stringify(changes), JSON.stringify({ selector: "id=APD_::Note" }));
     assert.deepEqual(logged, []);
   });
 });

@@ -1,5 +1,6 @@
-// The `__rewriteSelector` hook of the plugin, which Browser runs in the page
-// (bundle.js puts it and what it requires into one function).
+// The `__rewriteAction` hook of the plugin, which Browser runs in the page
+// (bundle.js puts it and what it requires into one function). The plugin
+// changes only the selector of an Action.
 
 const { pipeline, selectorStep } = require("./run_rules.js");
 const idEngine = require("./id_engine.js");
@@ -17,4 +18,10 @@ const SELECTOR_RULES = [
 
 // The selector rules run first; last, the CSS ids left are written with the
 // id engine.
-module.exports.rewriteSelector = pipeline([...SELECTOR_RULES.map(selectorStep), idEngine.step]);
+const rewriteSelector = pipeline([...SELECTOR_RULES.map(selectorStep), idEngine.step]);
+
+module.exports.rewriteAction = ({ action, element, query, log }) => {
+  const selector = rewriteSelector({ name: action.name, selector: action.selector, element, query, log });
+  if (selector === undefined) return undefined;
+  return { selector };
+};

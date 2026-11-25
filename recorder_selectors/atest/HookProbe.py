@@ -1,6 +1,6 @@
 """A Browser plugin for the acceptance tests of RecorderSelectors.
 
-It runs the plugin's ``__rewriteSelector`` hook in the page for an Action given
+It runs the plugin's ``__rewriteAction`` hook in the page for an Action given
 as Playwright reports it, the way `Record Keyword` documents the hook:
 
 | Library    Browser    plugins=${CURDIR}/../RecorderSelectors,${CURDIR}/HookProbe.py
