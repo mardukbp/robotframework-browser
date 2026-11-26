@@ -57,7 +57,7 @@ page around it.
 
 A rule's selector is used only when it finds exactly the recorded element; otherwise the
 selector before that rule is kept and the reason is logged in `playwright-log.txt`,
-prefixed with `recorder_selectors <rule>:`. So a rule whose selector Browser would reject
+prefixed with `recorderSelectors: <rule>:`. So a rule whose selector Browser would reject
 does not cost the selectors the rules before it gave.
 
 `scope="Text"` keeps the elements found so far whose closest visible text before them is
@@ -140,7 +140,8 @@ element.
 
 Add the rule to `STEPS` in `js/hook.js`, at the place in the order where it makes sense;
 its `name` is how users choose it. Everything `js/hook.js` requires runs in the page: Browser
-runs the source of the hook there, and the hook must be a function with a name of its own.
+runs the source of the hook there, and the hook must be written with `function` and a name
+of its own.
 So `js/index.js` puts the bundle of `js/hook.js` (`js/bundle.js`) into the body of a function
 named `recorderSelectors`, with the rules chosen, and the log names the hook by it. The
 bundle follows only relative `require`s, in either quote style; any other `require` fails in

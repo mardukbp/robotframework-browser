@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "robotframework-browser-recorder-selectors"
 dynamic = ["version"]
-# Needs the __rewriteAction hook of Record Keyword.
+# Needs the __rewriteAction hook of Record Keyword, which no release has yet:
+# set the floor to the first release that ships it.
 dependencies = ["robotframework-browser>=21.0.0"]
 requires-python = ">= 3.11"
 description = "A Browser library plugin that makes the recorder record readable selectors."

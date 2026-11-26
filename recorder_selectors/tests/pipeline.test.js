@@ -46,7 +46,7 @@ describe("pipeline", () => {
     ]);
     const { args, logged } = hookArgs("#a");
     assert.equal(hook(args), "#c");
-    assert.deepEqual(logged, ["recorder_selectors broken: #a kept: Error: boom"]);
+    assert.deepEqual(logged, ["broken: #a kept: Error: boom"]);
   });
 
   it("keeps the selector a step got when the one it gives does not find exactly the element", () => {
@@ -56,8 +56,8 @@ describe("pipeline", () => {
     const { args, logged } = hookArgs("#a", { query: (selector) => queryOf[selector] });
     assert.equal(hook(args), "#c");
     assert.deepEqual(logged, [
-      "recorder_selectors wrong: #late finds another element, #c kept",
-      "recorder_selectors none: #gone finds no element, #c kept",
+      "wrong: #late finds another element, #c kept",
+      "none: #gone finds no element, #c kept",
     ]);
   });
 

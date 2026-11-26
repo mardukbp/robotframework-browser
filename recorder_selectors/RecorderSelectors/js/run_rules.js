@@ -59,7 +59,7 @@ function pipeline(steps) {
 // The selector after one step: the one it gave when that finds exactly the
 // element, otherwise the one it got.
 function runStep(step, selector, ask) {
-  const log = (message) => ask.log(`recorder_selectors ${step.name}: ${message}`);
+  const log = (message) => ask.log(`${step.name}: ${message}`);
   let given;
   try {
     given = step.run({ ...ask, selector });
@@ -100,7 +100,7 @@ function allHold(conditions, fact) {
 
 // The first selector of `rule` that finds only the recorded element.
 function trySelectors(rule, ask, recorded) {
-  const log = (message) => ask.log(`recorder_selectors ${rule.name}: ${message}`);
+  const log = (message) => ask.log(`${rule.name}: ${message}`);
   const proposed = selectorsToTry(rule, { recorded, element: ask.describe() });
   const checked = mapUntil(
     proposed,
